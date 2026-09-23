@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "id": "trpc-7464",
+  "repo": "trpc/trpc",
+  "language": "ts",
+  "minedAt": "2026-09-23T21:57:31.793Z",
+  "fix": {
+    "number": 7464,
+    "title": "fix(tanstack-react-query): subscriptionOptions(skipToken).enabled incorrectly returns true",
+    "url": "https://github.com/trpc/trpc/pull/7464",
+    "mergedAt": "2026-09-12T11:06:10Z",
+    "mergeCommitSha": "e35b9989bd474eec209fa2f9b36857a46c836940",
+    "baseSha": "acff82332de8b4562d3e6975fa8d94ab1a6de5e0",
+    "headSha": "57a33e494600dd27d8453d256a617bc7fc640e36",
+    "labels": [],
+    "parentSha": "2c61222290371fbc7f8645aa552c5b78b18afbe3"
+  },
+  "introducing": {
+    "commitSha": "1e14c1ab4122b7a6964086b69928a5369534edaa",
+    "commitDate": "2025-10-25T15:05:28.000Z",
+    "pr": {
+      "number": 6976,
+      "title": "feat(tanstack-react-query): Add QueryKey and MutationKey Prefix option",
+      "url": "https://github.com/trpc/trpc/pull/6976",
+      "mergedAt": "2025-10-25T15:05:28Z",
+      "mergeCommitSha": "1e14c1ab4122b7a6964086b69928a5369534edaa",
+      "baseSha": "4c9efbb587f6bc327c5d92dbe95c82690002aa72",
+      "headSha": "2d023e159a4c7cb840071725dbd70fdb4295a222",
+      "changedFiles": 14,
+      "additions": 1251,
+      "deletions": 286
+    }
+  },
+  "bugLines": [
+    {
+      "file": "packages/tanstack-react-query/src/internals/subscriptionOptions.ts",
+      "ranges": [
+        [
+          15,
+          15
+        ],
+        [
+          141,
+          141
+        ]
+      ],
+      "fixFile": "packages/tanstack-react-query/src/internals/subscriptionOptions.ts",
+      "fixRanges": [
+        [
+          15,
+          15
+        ],
+        [
+          140,
+          141
+        ],
+        [
+          147,
+          147
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 2,
+  "daysToFix": 321.8
+}

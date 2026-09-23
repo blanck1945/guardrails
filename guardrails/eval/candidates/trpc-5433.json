@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "id": "trpc-5433",
+  "repo": "trpc/trpc",
+  "language": "ts",
+  "minedAt": "2026-09-23T21:58:38.058Z",
+  "fix": {
+    "number": 5433,
+    "title": "fix(react-query): no ref in `useHookResult()`",
+    "url": "https://github.com/trpc/trpc/pull/5433",
+    "mergedAt": "2024-02-03T11:46:53Z",
+    "mergeCommitSha": "3bdb43bdeb3f02850a67048ae2cf9b6be69b9ede",
+    "baseSha": "0d93bc947ab7b4aa298ec288a3f296c5d76b2707",
+    "headSha": "b6fc1be9d218991617bef707e8f92f4a75fb508d",
+    "labels": [],
+    "parentSha": "0d93bc947ab7b4aa298ec288a3f296c5d76b2707"
+  },
+  "introducing": {
+    "commitSha": "f3a71c30678fe397a67f5ade16d078dae3c6d275",
+    "commitDate": "2022-12-26T17:33:10.000Z",
+    "pr": {
+      "number": 3480,
+      "title": "chore: deprecate usage of `createHooksInternal`",
+      "url": "https://github.com/trpc/trpc/pull/3480",
+      "mergedAt": "2022-12-26T17:33:11Z",
+      "mergeCommitSha": "f3a71c30678fe397a67f5ade16d078dae3c6d275",
+      "baseSha": "f80c3d8b17a000e209fcdf048f7492b6a3180ca3",
+      "headSha": "39e84834a71a14e660610f5da34651a207f13184",
+      "changedFiles": 17,
+      "additions": 910,
+      "deletions": 345
+    }
+  },
+  "bugLines": [
+    {
+      "file": "packages/react-query/src/internals/useHookResult.ts",
+      "ranges": [
+        [
+          1,
+          1
+        ],
+        [
+          15,
+          17
+        ]
+      ],
+      "fixFile": "packages/react-query/src/internals/useHookResult.ts",
+      "fixRanges": [
+        [
+          1,
+          1
+        ],
+        [
+          15,
+          17
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 4,
+  "daysToFix": 403.8
+}

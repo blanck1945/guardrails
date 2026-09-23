@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "id": "trpc-7370",
+  "repo": "trpc/trpc",
+  "language": "ts",
+  "minedAt": "2026-09-23T21:57:36.810Z",
+  "fix": {
+    "number": 7370,
+    "title": "fix(tanstack-react-query): add prefix support for mutation options",
+    "url": "https://github.com/trpc/trpc/pull/7370",
+    "mergedAt": "2026-05-26T23:00:27Z",
+    "mergeCommitSha": "c7360d4eb3c89c336468809a293e5cda4b302d4b",
+    "baseSha": "774b244ca97518b86489d7b3c02c5f7b5e0de3ee",
+    "headSha": "664b98c0b36e6c26e903b912ef97531314d7b59c",
+    "labels": [],
+    "parentSha": "774b244ca97518b86489d7b3c02c5f7b5e0de3ee"
+  },
+  "introducing": {
+    "commitSha": "3ae1c3651a54ff0780fe1e34170d2c70abb3be15",
+    "commitDate": "2025-10-28T10:40:18.000Z",
+    "pr": {
+      "number": 6990,
+      "title": "fix(tanstack-react-query): keyPrefix of undefined",
+      "url": "https://github.com/trpc/trpc/pull/6990",
+      "mergedAt": "2025-10-28T10:40:19Z",
+      "mergeCommitSha": "3ae1c3651a54ff0780fe1e34170d2c70abb3be15",
+      "baseSha": "5ad18f68691ca10b5100b0a4bc2a65fdd78e5858",
+      "headSha": "225097f326c0c2867333727dc05c60397990a2b8",
+      "changedFiles": 6,
+      "additions": 711,
+      "deletions": 342
+    }
+  },
+  "bugLines": [
+    {
+      "file": "packages/tanstack-react-query/src/internals/mutationOptions.ts",
+      "ranges": [
+        [
+          112,
+          112
+        ]
+      ],
+      "fixFile": "packages/tanstack-react-query/src/internals/mutationOptions.ts",
+      "fixRanges": [
+        [
+          107,
+          107
+        ],
+        [
+          112,
+          112
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 1,
+  "daysToFix": 210.5
+}

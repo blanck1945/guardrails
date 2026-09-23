@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "hono-5274",
+  "repo": "honojs/hono",
+  "language": "ts",
+  "minedAt": "2026-09-23T21:56:33.225Z",
+  "fix": {
+    "number": 5274,
+    "title": "fix(utils/stream): do not let abort listeners crash abort()",
+    "url": "https://github.com/honojs/hono/pull/5274",
+    "mergedAt": "2026-08-23T07:34:05Z",
+    "mergeCommitSha": "5e5b83d6ed963a2bc7d8384002e1c953648253b1",
+    "baseSha": "4b44abe1b5c7755aac8555d7943611555183450b",
+    "headSha": "05903550bb2feb8a226f0f8e07b306d11a747251",
+    "labels": [],
+    "parentSha": "241ae4c72b7ab732e425f40ea28cd3af2e78d8a2"
+  },
+  "introducing": {
+    "commitSha": "2d3bc55954ed440ebcccba0d0bcdd448bf94b471",
+    "commitDate": "2024-06-28T22:00:28.000Z",
+    "pr": {
+      "number": 3042,
+      "title": "fix(streaming): call stream.abort() explicitly when request is aborted",
+      "url": "https://github.com/honojs/hono/pull/3042",
+      "mergedAt": "2024-06-28T22:00:28Z",
+      "mergeCommitSha": "2d3bc55954ed440ebcccba0d0bcdd448bf94b471",
+      "baseSha": "a6ad42d03b8902d3cb1720b7ef95264818431e1d",
+      "headSha": "49b770bd2827209c19f6f475ff43a9dcda5117d2",
+      "changedFiles": 11,
+      "additions": 318,
+      "deletions": 4
+    }
+  },
+  "bugLines": [
+    {
+      "file": "src/utils/stream.ts",
+      "ranges": [
+        [
+          88,
+          88
+        ]
+      ],
+      "fixFile": "src/utils/stream.ts",
+      "fixRanges": [
+        [
+          98,
+          98
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 1,
+  "daysToFix": 785.4
+}

@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "id": "fastapi-15093",
+  "repo": "fastapi/fastapi",
+  "language": "py",
+  "minedAt": "2026-09-23T21:56:52.746Z",
+  "fix": {
+    "number": 15093,
+    "title": "🐛 Fix `response_model_*` params ignored for non-generator endpoints with `Iterable[..]` return type",
+    "url": "https://github.com/fastapi/fastapi/pull/15093",
+    "mergedAt": "2026-07-28T14:22:06Z",
+    "mergeCommitSha": "d6537f774b0e80e376e2cf4e0fa998a38c6d0c09",
+    "baseSha": "584efa0981d9136512706d90d78e771842d589a5",
+    "headSha": "680578ecdda574d633947b1810c3b679d1e5b156",
+    "labels": [
+      "bug"
+    ],
+    "parentSha": "0f3d3b2f9f09f04fe612d4b7db32485170c9f1dd"
+  },
+  "introducing": {
+    "commitSha": "8e1d774cef03ab9e2552c26e850cbfc0c63974c3",
+    "commitDate": "2026-06-14T12:35:48.000Z",
+    "pr": {
+      "number": 15745,
+      "title": "♻️ Refactor internals to preserve `APIRouter` and `APIRoute` instances",
+      "url": "https://github.com/fastapi/fastapi/pull/15745",
+      "mergedAt": "2026-06-14T12:35:48Z",
+      "mergeCommitSha": "8e1d774cef03ab9e2552c26e850cbfc0c63974c3",
+      "baseSha": "016ab760faba1813ba235d5582a014a58bd2f417",
+      "headSha": "1e70f7cdc8c05cc16146f9a40c3776912384caf6",
+      "changedFiles": 11,
+      "additions": 1877,
+      "deletions": 316
+    }
+  },
+  "bugLines": [
+    {
+      "file": "fastapi/routing.py",
+      "ranges": [
+        [
+          950,
+          950
+        ],
+        [
+          954,
+          954
+        ],
+        [
+          990,
+          990
+        ],
+        [
+          994,
+          995
+        ],
+        [
+          997,
+          997
+        ],
+        [
+          1001,
+          1004
+        ],
+        [
+          1006,
+          1006
+        ],
+        [
+          1010,
+          1010
+        ]
+      ],
+      "fixFile": "fastapi/routing.py",
+      "fixRanges": [
+        [
+          990,
+          1011
+        ],
+        [
+          1047,
+          1067
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 12,
+  "daysToFix": 44.1
+}

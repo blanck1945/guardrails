@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "id": "trpc-7233",
+  "repo": "trpc/trpc",
+  "language": "ts",
+  "minedAt": "2026-09-23T21:57:44.995Z",
+  "fix": {
+    "number": 7233,
+    "title": "fix: preserve buffered chunks on stream close in httpBatchStreamLink",
+    "url": "https://github.com/trpc/trpc/pull/7233",
+    "mergedAt": "2026-03-20T20:41:00Z",
+    "mergeCommitSha": "6ccaf04b0af4e06936e640bc45173fab5c8a2b0a",
+    "baseSha": "5b0a4378f4bc5613ffc499c4781c549570799fbd",
+    "headSha": "3cffe797ca63441b05a8093c0302a2495afa7ec8",
+    "labels": [],
+    "parentSha": "5b0a4378f4bc5613ffc499c4781c549570799fbd"
+  },
+  "introducing": {
+    "commitSha": "9b274114cfe861c0b37abc48bb2cef550a2ebf16",
+    "commitDate": "2025-09-25T01:07:59.000Z",
+    "pr": {
+      "number": 6960,
+      "title": "fix(client): `httpBatchStreamLink` in React Native \"stream ends with TypeError\"",
+      "url": "https://github.com/trpc/trpc/pull/6960",
+      "mergedAt": "2025-09-25T01:07:59Z",
+      "mergeCommitSha": "9b274114cfe861c0b37abc48bb2cef550a2ebf16",
+      "baseSha": "466a924bf035bc729339019accf8c19d41200846",
+      "headSha": "72486e5b6dc1bdb07d3f8d4329f8f414ea339680",
+      "changedFiles": 5,
+      "additions": 146,
+      "deletions": 182
+    }
+  },
+  "bugLines": [
+    {
+      "file": "packages/server/src/unstable-core-do-not-import/stream/jsonl.ts",
+      "ranges": [
+        [
+          588,
+          588
+        ],
+        [
+          615,
+          615
+        ]
+      ],
+      "fixFile": "packages/server/src/unstable-core-do-not-import/stream/jsonl.ts",
+      "fixRanges": [
+        [
+          594,
+          594
+        ],
+        [
+          621,
+          622
+        ],
+        [
+          627,
+          627
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 2,
+  "daysToFix": 176.8
+}

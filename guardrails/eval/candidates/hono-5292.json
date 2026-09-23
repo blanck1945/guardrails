@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "id": "hono-5292",
+  "repo": "honojs/hono",
+  "language": "ts",
+  "minedAt": "2026-09-23T21:56:17.555Z",
+  "fix": {
+    "number": 5292,
+    "title": "fix(aws-lambda): preserve empty query parameters",
+    "url": "https://github.com/honojs/hono/pull/5292",
+    "mergedAt": "2026-09-21T10:15:53Z",
+    "mergeCommitSha": "28e8572cd265b4da1160ce6cd51919bb70516e2c",
+    "baseSha": "5e5b83d6ed963a2bc7d8384002e1c953648253b1",
+    "headSha": "72f02990d379d9be2d296372b41a5a44fd5929c4",
+    "labels": [],
+    "parentSha": "0d86899d28e146da0c8760201b2d08ddae732eaa"
+  },
+  "introducing": {
+    "commitSha": "a437161c2b8dd639694c079c38db737135a2fb57",
+    "commitDate": "2024-05-20T23:59:31.000Z",
+    "pr": {
+      "number": 2751,
+      "title": "feat(aws-lambda): add support for alb multiValueQueryStringParameters",
+      "url": "https://github.com/honojs/hono/pull/2751",
+      "mergedAt": "2024-05-20T23:59:31Z",
+      "mergeCommitSha": "a437161c2b8dd639694c079c38db737135a2fb57",
+      "baseSha": "7f309ecb9dd1454e56bc23b4b8e08693279fcb75",
+      "headSha": "ffd5d6b8298d42514fc57400640d56fd587d261f",
+      "changedFiles": 2,
+      "additions": 115,
+      "deletions": 6
+    }
+  },
+  "bugLines": [
+    {
+      "file": "src/adapter/aws-lambda/handler.ts",
+      "ranges": [
+        [
+          420,
+          420
+        ]
+      ],
+      "fixFile": "src/adapter/aws-lambda/handler.ts",
+      "fixRanges": [
+        [
+          468,
+          468
+        ],
+        [
+          558,
+          558
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 1,
+  "daysToFix": 853.4
+}

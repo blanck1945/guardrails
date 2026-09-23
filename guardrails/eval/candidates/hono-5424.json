@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "hono-5424",
+  "repo": "honojs/hono",
+  "language": "ts",
+  "minedAt": "2026-09-23T21:56:15.968Z",
+  "fix": {
+    "number": 5424,
+    "title": "fix(aws-lambda): treat binary +xml archive media types as binary",
+    "url": "https://github.com/honojs/hono/pull/5424",
+    "mergedAt": "2026-09-21T10:12:52Z",
+    "mergeCommitSha": "0d86899d28e146da0c8760201b2d08ddae732eaa",
+    "baseSha": "52febbcc30bc509d5e4987577e63906fe08fc471",
+    "headSha": "6f6790f013fa702c736c6ffb03ac685bcf553d90",
+    "labels": [],
+    "parentSha": "52febbcc30bc509d5e4987577e63906fe08fc471"
+  },
+  "introducing": {
+    "commitSha": "253ec2857a083595e52a446694923645084e9ecd",
+    "commitDate": "2025-10-23T04:31:35.000Z",
+    "pr": {
+      "number": 4469,
+      "title": "fix(aws-lambda): serve microsoft office files as binary in lambda handler",
+      "url": "https://github.com/honojs/hono/pull/4469",
+      "mergedAt": "2025-10-23T04:31:35Z",
+      "mergeCommitSha": "253ec2857a083595e52a446694923645084e9ecd",
+      "baseSha": "db764c2f1d8a2905d66c78c41aa47e47d3a4165d",
+      "headSha": "5efd05abcf3139ab0893c38ebce3e78e755f8024",
+      "changedFiles": 2,
+      "additions": 20,
+      "deletions": 13
+    }
+  },
+  "bugLines": [
+    {
+      "file": "src/adapter/aws-lambda/handler.ts",
+      "ranges": [
+        [
+          567,
+          567
+        ]
+      ],
+      "fixFile": "src/adapter/aws-lambda/handler.ts",
+      "fixRanges": [
+        [
+          671,
+          671
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 1,
+  "daysToFix": 333.2
+}

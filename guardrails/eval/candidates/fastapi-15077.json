@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "id": "fastapi-15077",
+  "repo": "fastapi/fastapi",
+  "language": "py",
+  "minedAt": "2026-09-23T21:56:49.511Z",
+  "fix": {
+    "number": 15077,
+    "title": "🐛 Fix stream item type lost when using `include_router()`",
+    "url": "https://github.com/fastapi/fastapi/pull/15077",
+    "mergedAt": "2026-07-28T10:22:09Z",
+    "mergeCommitSha": "ad03e117c0010a563067740c97cb7ab011cb5174",
+    "baseSha": "98b12fe56f97107e71a20fc1cf334ccfa590efb5",
+    "headSha": "bdcff30ca261b51a364d8aa55f5c6bf071cce1fa",
+    "labels": [
+      "bug"
+    ],
+    "parentSha": "98b12fe56f97107e71a20fc1cf334ccfa590efb5"
+  },
+  "introducing": {
+    "commitSha": "8e1d774cef03ab9e2552c26e850cbfc0c63974c3",
+    "commitDate": "2026-06-14T12:35:48.000Z",
+    "pr": {
+      "number": 15745,
+      "title": "♻️ Refactor internals to preserve `APIRouter` and `APIRoute` instances",
+      "url": "https://github.com/fastapi/fastapi/pull/15745",
+      "mergedAt": "2026-06-14T12:35:48Z",
+      "mergeCommitSha": "8e1d774cef03ab9e2552c26e850cbfc0c63974c3",
+      "baseSha": "016ab760faba1813ba235d5582a014a58bd2f417",
+      "headSha": "1e70f7cdc8c05cc16146f9a40c3776912384caf6",
+      "changedFiles": 11,
+      "additions": 1877,
+      "deletions": 316
+    }
+  },
+  "bugLines": [
+    {
+      "file": "fastapi/routing.py",
+      "ranges": [
+        [
+          932,
+          932
+        ]
+      ],
+      "fixFile": "fastapi/routing.py",
+      "fixRanges": [
+        [
+          988,
+          988
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 1,
+  "daysToFix": 43.9
+}

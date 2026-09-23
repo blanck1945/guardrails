@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "id": "trpc-7465",
+  "repo": "trpc/trpc",
+  "language": "ts",
+  "minedAt": "2026-09-23T21:57:30.222Z",
+  "fix": {
+    "number": 7465,
+    "title": "fix(docs): fix 19 dead links in llms.txt — use permalink, absolute URLs, and H1 title",
+    "url": "https://github.com/trpc/trpc/pull/7465",
+    "mergedAt": "2026-09-12T11:02:33Z",
+    "mergeCommitSha": "2c61222290371fbc7f8645aa552c5b78b18afbe3",
+    "baseSha": "acff82332de8b4562d3e6975fa8d94ab1a6de5e0",
+    "headSha": "b501310e8c28adedabb69a0030c00d658b0561c6",
+    "labels": [],
+    "parentSha": "3d21d2c1364139938f1d7924802af67b506ca544"
+  },
+  "introducing": {
+    "commitSha": "5bcc761835347bcf675dcbd8b8d7c5ec04e4450d",
+    "commitDate": "2025-05-17T11:41:47.000Z",
+    "pr": {
+      "number": 6758,
+      "title": "feat(www): adds llms txt files",
+      "url": "https://github.com/trpc/trpc/pull/6758",
+      "mergedAt": "2025-05-17T11:41:47Z",
+      "mergeCommitSha": "5bcc761835347bcf675dcbd8b8d7c5ec04e4450d",
+      "baseSha": "377527514bcacbf30b7c64676a2fa234515ae229",
+      "headSha": "2fa7870b28e69cb7044399d3ccb93b6ff818e757",
+      "changedFiles": 1,
+      "additions": 312,
+      "deletions": 0
+    }
+  },
+  "bugLines": [
+    {
+      "file": "www/docusaurus.config.ts",
+      "ranges": [
+        [
+          408,
+          409
+        ],
+        [
+          483,
+          483
+        ]
+      ],
+      "fixFile": "www/docusaurus.config.ts",
+      "fixRanges": [
+        [
+          401,
+          402
+        ],
+        [
+          476,
+          476
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 3,
+  "daysToFix": 483
+}

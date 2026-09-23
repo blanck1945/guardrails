@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "id": "fastapi-14873",
+  "repo": "fastapi/fastapi",
+  "language": "py",
+  "minedAt": "2026-09-23T21:56:58.298Z",
+  "fix": {
+    "number": 14873,
+    "title": "🐛 Fix `on_startup` and `on_shutdown` parameters of `APIRouter`",
+    "url": "https://github.com/fastapi/fastapi/pull/14873",
+    "mergedAt": "2026-02-09T16:31:57Z",
+    "mergeCommitSha": "ed2512a5ec33d9d70f7a9ef2e5f9fe52d3b77ab2",
+    "baseSha": "cd31576d5704b6aef1bdadc43770238cd88aad2b",
+    "headSha": "404aadf1d7180fac0d9c95100e17ad39a8a27267",
+    "labels": [
+      "bug"
+    ],
+    "parentSha": "0c0f6332e29f62001c94bf5c2d77ff1d79b73bf9"
+  },
+  "introducing": {
+    "commitSha": "f9f79926047d7f5d8e0127dd585e7683ee57e9f7",
+    "commitDate": "2026-02-06T15:18:30.000Z",
+    "pr": {
+      "number": 14851,
+      "title": "♻️ Re-implement `on_event` in FastAPI for compatibility with the next Starlette, while keeping backwards compatibility",
+      "url": "https://github.com/fastapi/fastapi/pull/14851",
+      "mergedAt": "2026-02-06T15:18:31Z",
+      "mergeCommitSha": "f9f79926047d7f5d8e0127dd585e7683ee57e9f7",
+      "baseSha": "8e50c55fd90c4433ddc9096ff439da9498a8314a",
+      "headSha": "7e596af53c5dca338e62325e4bd30fd2f6ba7496",
+      "changedFiles": 2,
+      "additions": 229,
+      "deletions": 4
+    }
+  },
+  "bugLines": [
+    {
+      "file": "fastapi/routing.py",
+      "ranges": [
+        [
+          986,
+          991
+        ]
+      ],
+      "fixFile": "fastapi/routing.py",
+      "fixRanges": [
+        [
+          955,
+          964
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 6,
+  "daysToFix": 3.1
+}

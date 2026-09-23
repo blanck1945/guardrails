@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "hono-5246",
+  "repo": "honojs/hono",
+  "language": "ts",
+  "minedAt": "2026-09-23T21:56:34.783Z",
+  "fix": {
+    "number": 5246,
+    "title": "fix(cookie): allow parsing signed cookies with empty string values",
+    "url": "https://github.com/honojs/hono/pull/5246",
+    "mergedAt": "2026-08-23T07:24:02Z",
+    "mergeCommitSha": "241ae4c72b7ab732e425f40ea28cd3af2e78d8a2",
+    "baseSha": "41bdc4288ed7023c24d35f32bd065bd963435e3e",
+    "headSha": "63d11538c9e07f3cfca727b8a54b2ad7071c8911",
+    "labels": [],
+    "parentSha": "c409d855d91d1f0904d19439692216fcf789e6cb"
+  },
+  "introducing": {
+    "commitSha": "f616ed9abe3e3cc28d3c96894020897796bfbde2",
+    "commitDate": "2024-01-29T13:21:09.000Z",
+    "pr": {
+      "number": 2112,
+      "title": "chore(lint): set `curly` rule as `all`",
+      "url": "https://github.com/honojs/hono/pull/2112",
+      "mergedAt": "2024-01-29T13:21:10Z",
+      "mergeCommitSha": "f616ed9abe3e3cc28d3c96894020897796bfbde2",
+      "baseSha": "4031fa8937e229fc96f615e144e817c718e2bf7f",
+      "headSha": "7291842177d0868384854fe1da2a58a2600ce9f2",
+      "changedFiles": 31,
+      "additions": 214,
+      "deletions": 76
+    }
+  },
+  "bugLines": [
+    {
+      "file": "src/utils/cookie.ts",
+      "ranges": [
+        [
+          95,
+          95
+        ]
+      ],
+      "fixFile": "src/utils/cookie.ts",
+      "fixRanges": [
+        [
+          156,
+          156
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 1,
+  "daysToFix": 936.8
+}

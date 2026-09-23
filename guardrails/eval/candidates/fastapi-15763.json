@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "id": "fastapi-15763",
+  "repo": "fastapi/fastapi",
+  "language": "py",
+  "minedAt": "2026-09-23T21:56:59.654Z",
+  "fix": {
+    "number": 15763,
+    "title": "🐛 Fix bug, allow empty path in path operation in prefixless router",
+    "url": "https://github.com/fastapi/fastapi/pull/15763",
+    "mergedAt": "2026-06-15T10:55:06Z",
+    "mergeCommitSha": "d8aad201eba558b20419a832e51a026b0e6ede0e",
+    "baseSha": "9a9c4ad5d06f5fe8ee6775a5aeaa2f83c854f263",
+    "headSha": "c66d2641b3e0ccc8fd58e166b6242f70df568b2d",
+    "labels": [
+      "bug"
+    ],
+    "parentSha": "9a9c4ad5d06f5fe8ee6775a5aeaa2f83c854f263"
+  },
+  "introducing": {
+    "commitSha": "8e1d774cef03ab9e2552c26e850cbfc0c63974c3",
+    "commitDate": "2026-06-14T12:35:48.000Z",
+    "pr": {
+      "number": 15745,
+      "title": "♻️ Refactor internals to preserve `APIRouter` and `APIRoute` instances",
+      "url": "https://github.com/fastapi/fastapi/pull/15745",
+      "mergedAt": "2026-06-14T12:35:48Z",
+      "mergeCommitSha": "8e1d774cef03ab9e2552c26e850cbfc0c63974c3",
+      "baseSha": "016ab760faba1813ba235d5582a014a58bd2f417",
+      "headSha": "1e70f7cdc8c05cc16146f9a40c3776912384caf6",
+      "changedFiles": 11,
+      "additions": 1877,
+      "deletions": 316
+    }
+  },
+  "bugLines": [
+    {
+      "file": "fastapi/routing.py",
+      "ranges": [
+        [
+          2438,
+          2439
+        ]
+      ],
+      "fixFile": "fastapi/routing.py",
+      "fixRanges": [
+        [
+          2438,
+          2440
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 2,
+  "daysToFix": 0.9
+}

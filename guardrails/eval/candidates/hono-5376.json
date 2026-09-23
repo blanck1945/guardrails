@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "id": "hono-5376",
+  "repo": "honojs/hono",
+  "language": "ts",
+  "minedAt": "2026-09-23T21:56:22.017Z",
+  "fix": {
+    "number": 5376,
+    "title": "fix(accepts): match media types and language tags case-insensitively",
+    "url": "https://github.com/honojs/hono/pull/5376",
+    "mergedAt": "2026-09-20T08:33:52Z",
+    "mergeCommitSha": "f5a53463ad2ff791fc02418b645750ce75a260ad",
+    "baseSha": "edd138ee3049749190de3dcd7e32d7bcbf224e41",
+    "headSha": "79e50aa8a38bbe27f7617cf59c9aebbf57864d9a",
+    "labels": [],
+    "parentSha": "cb5bea3614e6591e8ab933ef9a38ce7addf1d09a"
+  },
+  "introducing": {
+    "commitSha": "28a9c128912de19f3fb28b00ae289c9b93f6f392",
+    "commitDate": "2026-08-22T05:55:00.000Z",
+    "pr": {
+      "number": 5255,
+      "title": "fix(accepts): support wildcard media types and specificity ordering in defaultMatch",
+      "url": "https://github.com/honojs/hono/pull/5255",
+      "mergedAt": "2026-08-22T05:55:00Z",
+      "mergeCommitSha": "28a9c128912de19f3fb28b00ae289c9b93f6f392",
+      "baseSha": "eea9735fe308e6549509c312d80e13cd9e18898b",
+      "headSha": "1d30eb13202090c20f09baee32d6a53cf15eda7a",
+      "changedFiles": 2,
+      "additions": 119,
+      "deletions": 2
+    }
+  },
+  "bugLines": [
+    {
+      "file": "src/helper/accepts/accepts.ts",
+      "ranges": [
+        [
+          22,
+          22
+        ],
+        [
+          25,
+          25
+        ],
+        [
+          28,
+          30
+        ]
+      ],
+      "fixFile": "src/helper/accepts/accepts.ts",
+      "fixRanges": [
+        [
+          22,
+          22
+        ],
+        [
+          25,
+          25
+        ],
+        [
+          28,
+          30
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 5,
+  "daysToFix": 29.1
+}

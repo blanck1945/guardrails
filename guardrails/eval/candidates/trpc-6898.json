@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "id": "trpc-6898",
+  "repo": "trpc/trpc",
+  "language": "ts",
+  "minedAt": "2026-09-23T21:58:05.682Z",
+  "fix": {
+    "number": 6898,
+    "title": "chore: fix ci",
+    "url": "https://github.com/trpc/trpc/pull/6898",
+    "mergedAt": "2025-08-18T22:12:09Z",
+    "mergeCommitSha": "a653da019921989c35fc7cd45ac3ba14c7a9e95b",
+    "baseSha": "7c93a1f6ef298bd2997d8bcf2698843e6537f125",
+    "headSha": "2f663f86c0ce0a12f73827e2093eaf8c54584e15",
+    "labels": [],
+    "parentSha": "7c93a1f6ef298bd2997d8bcf2698843e6537f125"
+  },
+  "introducing": {
+    "commitSha": "b0426132b53af5b3a679063522429e5842f577e4",
+    "commitDate": "2025-06-12T11:16:45.000Z",
+    "pr": {
+      "number": 6789,
+      "title": "refactor: swap rollup with native rolldown (using tsdown)",
+      "url": "https://github.com/trpc/trpc/pull/6789",
+      "mergedAt": "2025-06-12T11:16:45Z",
+      "mergeCommitSha": "b0426132b53af5b3a679063522429e5842f577e4",
+      "baseSha": "571bbbc172fe9d6aed585db2ca32aa181e6ff90e",
+      "headSha": "c2e0ec0e411b7ea2cf4d30cff1cfd6ae82d0094b",
+      "changedFiles": 46,
+      "additions": 1416,
+      "deletions": 1617
+    }
+  },
+  "bugLines": [
+    {
+      "file": "packages/client/tsdown.config.ts",
+      "ranges": [
+        [
+          2,
+          2
+        ]
+      ],
+      "fixFile": "packages/client/tsdown.config.ts",
+      "fixRanges": [
+        [
+          2,
+          2
+        ]
+      ]
+    },
+    {
+      "file": "packages/next/tsdown.config.ts",
+      "ranges": [
+        [
+          2,
+          2
+        ]
+      ],
+      "fixFile": "packages/next/tsdown.config.ts",
+      "fixRanges": [
+        [
+          2,
+          2
+        ]
+      ]
+    },
+    {
+      "file": "packages/react-query/tsdown.config.ts",
+      "ranges": [
+        [
+          2,
+          2
+        ]
+      ],
+      "fixFile": "packages/react-query/tsdown.config.ts",
+      "fixRanges": [
+        [
+          2,
+          2
+        ]
+      ]
+    },
+    {
+      "file": "packages/server/tsdown.config.ts",
+      "ranges": [
+        [
+          2,
+          2
+        ]
+      ],
+      "fixFile": "packages/server/tsdown.config.ts",
+      "fixRanges": [
+        [
+          2,
+          2
+        ]
+      ]
+    },
+    {
+      "file": "packages/tanstack-react-query/tsdown.config.ts",
+      "ranges": [
+        [
+          2,
+          2
+        ]
+      ],
+      "fixFile": "packages/tanstack-react-query/tsdown.config.ts",
+      "fixRanges": [
+        [
+          2,
+          2
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 5,
+  "daysToFix": 67.5
+}

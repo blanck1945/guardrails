@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "hono-5291",
+  "repo": "honojs/hono",
+  "language": "ts",
+  "minedAt": "2026-09-23T21:56:30.128Z",
+  "fix": {
+    "number": 5291,
+    "title": "fix(client): normalize root WebSocket URLs",
+    "url": "https://github.com/honojs/hono/pull/5291",
+    "mergedAt": "2026-08-27T00:20:10Z",
+    "mergeCommitSha": "499c35ebda35777fd35a7dd1906dd4f2687da61e",
+    "baseSha": "5e5b83d6ed963a2bc7d8384002e1c953648253b1",
+    "headSha": "564adb92df4c6ad2f539b58cfcdbcc427a180193",
+    "labels": [],
+    "parentSha": "50b8788cf54cb60112b7cd93642bc5094901475c"
+  },
+  "introducing": {
+    "commitSha": "1096d66e03a3fd16a5cc5f912c2d5e8fd6d990b0",
+    "commitDate": "2026-08-22T05:39:03.000Z",
+    "pr": {
+      "number": 5256,
+      "title": "fix(client): support custom buildSearchParams and filter undefined query in $ws()",
+      "url": "https://github.com/honojs/hono/pull/5256",
+      "mergedAt": "2026-08-22T05:39:03Z",
+      "mergeCommitSha": "1096d66e03a3fd16a5cc5f912c2d5e8fd6d990b0",
+      "baseSha": "eea9735fe308e6549509c312d80e13cd9e18898b",
+      "headSha": "0cd63f43581738f107e90c1bc71eab5beaaad483",
+      "changedFiles": 2,
+      "additions": 34,
+      "deletions": 7
+    }
+  },
+  "bugLines": [
+    {
+      "file": "src/client/client.ts",
+      "ranges": [
+        [
+          202,
+          202
+        ]
+      ],
+      "fixFile": "src/client/client.ts",
+      "fixRanges": [
+        [
+          208,
+          208
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 1,
+  "daysToFix": 4.8
+}

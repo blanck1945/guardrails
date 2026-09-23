@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "id": "fastapi-15937",
+  "repo": "fastapi/fastapi",
+  "language": "py",
+  "minedAt": "2026-09-23T21:56:52.378Z",
+  "fix": {
+    "number": 15937,
+    "title": "🐛 Fix `status_code` being ignored for SSE and JSONL streaming endpoints",
+    "url": "https://github.com/fastapi/fastapi/pull/15937",
+    "mergedAt": "2026-07-28T15:25:12Z",
+    "mergeCommitSha": "e92a0dc3ce5ecbebb8655dbe5465cb61d48f9fc0",
+    "baseSha": "b1346bb142c8154950953255eea535e5a83d62eb",
+    "headSha": "8938eda5e9841ea460c8447cfb6759fef3b4fc30",
+    "labels": [
+      "bug"
+    ],
+    "parentSha": "6215d8a6f3fed4eef63fe9d1ae600c12f62bd881"
+  },
+  "introducing": {
+    "commitSha": "22381558446c5d1ac376680a6581dd63b3a04119",
+    "commitDate": "2026-03-01T09:21:52.000Z",
+    "pr": {
+      "number": 15030,
+      "title": "✨ Add support for Server Sent Events",
+      "url": "https://github.com/fastapi/fastapi/pull/15030",
+      "mergedAt": "2026-03-01T09:21:53Z",
+      "mergeCommitSha": "22381558446c5d1ac376680a6581dd63b3a04119",
+      "baseSha": "48d58ae3b6ef4ded5a4794618c00345667256d98",
+      "headSha": "2269bb446a1233118812c9a4a62beb0aaf2054b0",
+      "changedFiles": 23,
+      "additions": 1681,
+      "deletions": 37
+    }
+  },
+  "bugLines": [
+    {
+      "file": "fastapi/routing.py",
+      "ranges": [
+        [
+          570,
+          570
+        ]
+      ],
+      "fixFile": "fastapi/routing.py",
+      "fixRanges": [
+        [
+          636,
+          636
+        ],
+        [
+          672,
+          672
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 1,
+  "daysToFix": 149.3
+}

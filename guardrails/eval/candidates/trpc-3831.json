@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "id": "trpc-3831",
+  "repo": "trpc/trpc",
+  "language": "ts",
+  "minedAt": "2026-09-23T21:58:42.738Z",
+  "fix": {
+    "number": 3831,
+    "title": "fix: export even more internals for dts files generation",
+    "url": "https://github.com/trpc/trpc/pull/3831",
+    "mergedAt": "2023-02-22T15:42:59Z",
+    "mergeCommitSha": "7a0dd840d97f4a3a77d84d481db36684aeaf5f8f",
+    "baseSha": "652708fe4811829ba9c3639c1969eb48c8515073",
+    "headSha": "afd48b407d7a1829c5976802bb9f3216a18e2c7c",
+    "labels": [
+      "@trpc/server"
+    ],
+    "parentSha": "bcad0f8c1ce598fbc4c629e7e244115bc681a913"
+  },
+  "introducing": {
+    "commitSha": "d5e4157172ebf357d1d849817cd256f08aa5dc1d",
+    "commitDate": "2023-02-18T14:44:49.000Z",
+    "pr": {
+      "number": 3789,
+      "title": "Internal types inference testing",
+      "url": "https://github.com/trpc/trpc/pull/3789",
+      "mergedAt": "2023-02-18T14:44:49Z",
+      "mergeCommitSha": "d5e4157172ebf357d1d849817cd256f08aa5dc1d",
+      "baseSha": "0918ff7b9b72085c56fae63d99dcef8a86ca0c8e",
+      "headSha": "4ce5400d05e56fb4ce4d6cad2891372173d62a82",
+      "changedFiles": 9,
+      "additions": 230,
+      "deletions": 64
+    }
+  },
+  "bugLines": [
+    {
+      "file": "packages/server/src/internals.ts",
+      "ranges": [
+        [
+          11,
+          11
+        ]
+      ],
+      "fixFile": "packages/server/src/internals.ts",
+      "fixRanges": [
+        [
+          11,
+          11
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 1,
+  "daysToFix": 4
+}

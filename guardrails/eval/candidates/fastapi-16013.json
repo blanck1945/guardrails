@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "id": "fastapi-16013",
+  "repo": "fastapi/fastapi",
+  "language": "py",
+  "minedAt": "2026-09-23T21:56:55.538Z",
+  "fix": {
+    "number": 16013,
+    "title": "🐛 Refactor router route building to make it thread-safe, mainly relevant for tests running in parallel threads (uncommon)",
+    "url": "https://github.com/fastapi/fastapi/pull/16013",
+    "mergedAt": "2026-07-16T14:57:38Z",
+    "mergeCommitSha": "7fe315c21afb8a57a2b559772e0f7ced7e5d071a",
+    "baseSha": "c48e67b1ce9c03fc9bd4b1ac72350e51ad5a6e8a",
+    "headSha": "9f919ffac33a0601d4ec5b510111eddd2291dd64",
+    "labels": [
+      "bug"
+    ],
+    "parentSha": "c48e67b1ce9c03fc9bd4b1ac72350e51ad5a6e8a"
+  },
+  "introducing": {
+    "commitSha": "4d3dc78b262c609daf8a23baa00f31221b386d52",
+    "commitDate": "2026-06-20T00:20:49.000Z",
+    "pr": {
+      "number": 15800,
+      "title": "✨ Add support for `app.frontend(\"/\", directory=\"dist\")` and `router.frontend(\"/\", directory=\"dist\")`",
+      "url": "https://github.com/fastapi/fastapi/pull/15800",
+      "mergedAt": "2026-06-20T00:20:49Z",
+      "mergeCommitSha": "4d3dc78b262c609daf8a23baa00f31221b386d52",
+      "baseSha": "f1d750fddad90e2faad6c3cc5c85c7687b787e89",
+      "headSha": "5bd3221f492738f5c413e9cc134096d5bd455251",
+      "changedFiles": 15,
+      "additions": 1649,
+      "deletions": 5
+    }
+  },
+  "bugLines": [
+    {
+      "file": "fastapi/routing.py",
+      "ranges": [
+        [
+          1555,
+          1571
+        ]
+      ],
+      "fixFile": "fastapi/routing.py",
+      "fixRanges": [
+        [
+          1587,
+          1602
+        ],
+        [
+          1608,
+          1624
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 17,
+  "daysToFix": 26.6
+}

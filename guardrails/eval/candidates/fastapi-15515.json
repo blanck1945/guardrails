@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "id": "fastapi-15515",
+  "repo": "fastapi/fastapi",
+  "language": "py",
+  "minedAt": "2026-09-23T21:56:52.504Z",
+  "fix": {
+    "number": 15515,
+    "title": "🐛 Fix line splitting in `format_sse_event` to comply with SSE spec",
+    "url": "https://github.com/fastapi/fastapi/pull/15515",
+    "mergedAt": "2026-07-28T14:54:54Z",
+    "mergeCommitSha": "0f3e7bd682a81488919227f2b5f1f7de1718ecdd",
+    "baseSha": "31ce3cb8d73a6e20221315a90dd98a117f0101a0",
+    "headSha": "871cfe7ea8cb922902ed9e140ec40db2722caf4a",
+    "labels": [
+      "bug"
+    ],
+    "parentSha": "31ce3cb8d73a6e20221315a90dd98a117f0101a0"
+  },
+  "introducing": {
+    "commitSha": "22381558446c5d1ac376680a6581dd63b3a04119",
+    "commitDate": "2026-03-01T09:21:52.000Z",
+    "pr": {
+      "number": 15030,
+      "title": "✨ Add support for Server Sent Events",
+      "url": "https://github.com/fastapi/fastapi/pull/15030",
+      "mergedAt": "2026-03-01T09:21:53Z",
+      "mergeCommitSha": "22381558446c5d1ac376680a6581dd63b3a04119",
+      "baseSha": "48d58ae3b6ef4ded5a4794618c00345667256d98",
+      "headSha": "2269bb446a1233118812c9a4a62beb0aaf2054b0",
+      "changedFiles": 23,
+      "additions": 1681,
+      "deletions": 37
+    }
+  },
+  "bugLines": [
+    {
+      "file": "fastapi/sse.py",
+      "ranges": [
+        [
+          196,
+          196
+        ],
+        [
+          203,
+          203
+        ]
+      ],
+      "fixFile": "fastapi/sse.py",
+      "fixRanges": [
+        [
+          209,
+          209
+        ],
+        [
+          216,
+          216
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 2,
+  "daysToFix": 149.2
+}

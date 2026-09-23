@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "hono-5366",
+  "repo": "honojs/hono",
+  "language": "ts",
+  "minedAt": "2026-09-23T21:56:24.414Z",
+  "fix": {
+    "number": 5366,
+    "title": "fix(request): keep the request media type when reusing a cached body",
+    "url": "https://github.com/honojs/hono/pull/5366",
+    "mergedAt": "2026-09-12T09:11:50Z",
+    "mergeCommitSha": "edd138ee3049749190de3dcd7e32d7bcbf224e41",
+    "baseSha": "f147de5ea1eeadd4b4851ab075999673e140a303",
+    "headSha": "2df6779f35fcc9e33ec2176c012b7b94fbb90bc9",
+    "labels": [],
+    "parentSha": "9b4e9c2864c30ea9275cf426e2d2716bd9f05195"
+  },
+  "introducing": {
+    "commitSha": "32ba5ba8360e0b8e1cb2b681af22469a9a3f7175",
+    "commitDate": "2024-06-10T14:51:43.000Z",
+    "pr": {
+      "number": 2947,
+      "title": "refactor(request): shorten `parseBody` and remove unnecessary check",
+      "url": "https://github.com/honojs/hono/pull/2947",
+      "mergedAt": "2024-06-10T14:51:43Z",
+      "mergeCommitSha": "32ba5ba8360e0b8e1cb2b681af22469a9a3f7175",
+      "baseSha": "0a974ffeb63c10e3de91965d8d87b2dc3c986288",
+      "headSha": "42f0797187ba1c61b53dfc4d4046e7575adfbd27",
+      "changedFiles": 1,
+      "additions": 8,
+      "deletions": 19
+    }
+  },
+  "bugLines": [
+    {
+      "file": "src/request.ts",
+      "ranges": [
+        [
+          222,
+          222
+        ]
+      ],
+      "fixFile": "src/request.ts",
+      "fixRanges": [
+        [
+          230,
+          230
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 1,
+  "daysToFix": 823.8
+}

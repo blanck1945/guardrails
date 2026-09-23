@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "id": "fastapi-14953",
+  "repo": "fastapi/fastapi",
+  "language": "py",
+  "minedAt": "2026-09-23T21:57:09.290Z",
+  "fix": {
+    "number": 14953,
+    "title": "♻️ Fix JSON Schema for bytes, use `\"contentMediaType\": \"application/octet-stream\"` instead of `\"format\": \"binary\"`",
+    "url": "https://github.com/fastapi/fastapi/pull/14953",
+    "mergedAt": "2026-02-21T13:01:31Z",
+    "mergeCommitSha": "e8b98d21871f64234520c1e770f39e6bfea3b0d5",
+    "baseSha": "d2c17b603d2f986d5f3800d3bf24acba8e1f485b",
+    "headSha": "089be9d25b8a33e023ef5084050c396e4902ae8c",
+    "labels": [
+      "bug"
+    ],
+    "parentSha": "d2c17b603d2f986d5f3800d3bf24acba8e1f485b"
+  },
+  "introducing": {
+    "commitSha": "d34918abf00c93ac592c5d1d1c55650d8c1b92ec",
+    "commitDate": "2025-10-11T16:45:54.000Z",
+    "pr": {
+      "number": 14168,
+      "title": "✨ Add support for `from pydantic.v1 import BaseModel`, mixed Pydantic v1 and v2 models in the same app",
+      "url": "https://github.com/fastapi/fastapi/pull/14168",
+      "mergedAt": "2025-10-11T16:45:54Z",
+      "mergeCommitSha": "d34918abf00c93ac592c5d1d1c55650d8c1b92ec",
+      "baseSha": "352dbefc634b21cff94663be1ab0a1aa5dbd6ed5",
+      "headSha": "49d191115de0cff748fb11cb7afeca1a650bec35",
+      "changedFiles": 46,
+      "additions": 9300,
+      "deletions": 987
+    }
+  },
+  "bugLines": [
+    {
+      "file": "fastapi/_compat/v2.py",
+      "ranges": [
+        [
+          31,
+          31
+        ]
+      ],
+      "fixFile": "fastapi/_compat/v2.py",
+      "fixRanges": [
+        [
+          30,
+          30
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 1,
+  "daysToFix": 132.8
+}

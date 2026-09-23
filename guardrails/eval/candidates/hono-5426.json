@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "hono-5426",
+  "repo": "honojs/hono",
+  "language": "ts",
+  "minedAt": "2026-09-23T21:56:14.367Z",
+  "fix": {
+    "number": 5426,
+    "title": "fix(lambda-edge): sync content type detection with aws-lambda",
+    "url": "https://github.com/honojs/hono/pull/5426",
+    "mergedAt": "2026-09-22T05:50:22Z",
+    "mergeCommitSha": "de310ac063febf3e7b73f6206142d0e88800661f",
+    "baseSha": "28e8572cd265b4da1160ce6cd51919bb70516e2c",
+    "headSha": "262fb539c06c5421b2da03bc0ce6bb7ef64299e4",
+    "labels": [],
+    "parentSha": "28e8572cd265b4da1160ce6cd51919bb70516e2c"
+  },
+  "introducing": {
+    "commitSha": "521db649b2fcc724270c2f747ff81f72ae7ccc74",
+    "commitDate": "2023-12-06T22:44:25.000Z",
+    "pr": {
+      "number": 1788,
+      "title": "fix: add missing tail to svg regex",
+      "url": "https://github.com/honojs/hono/pull/1788",
+      "mergedAt": "2023-12-06T22:44:26Z",
+      "mergeCommitSha": "521db649b2fcc724270c2f747ff81f72ae7ccc74",
+      "baseSha": "477e763ad360d291d86c059634e84854b7ea6169",
+      "headSha": "c2ac00175d5ccff1608474afe1e4d9f98df9060d",
+      "changedFiles": 4,
+      "additions": 6,
+      "deletions": 2
+    }
+  },
+  "bugLines": [
+    {
+      "file": "src/adapter/lambda-edge/handler.ts",
+      "ranges": [
+        [
+          161,
+          161
+        ]
+      ],
+      "fixFile": "src/adapter/lambda-edge/handler.ts",
+      "fixRanges": [
+        [
+          215,
+          215
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 1,
+  "daysToFix": 1020.3
+}

@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "id": "trpc-5211",
+  "repo": "trpc/trpc",
+  "language": "ts",
+  "minedAt": "2026-09-23T21:58:47.448Z",
+  "fix": {
+    "number": 5211,
+    "title": "fix: Incorrect serialization of `IndexSignature` and `Record`",
+    "url": "https://github.com/trpc/trpc/pull/5211",
+    "mergedAt": "2023-12-25T15:15:07Z",
+    "mergeCommitSha": "b005dc608634bcf8a4d4d5321fe741fef3da1cd9",
+    "baseSha": "a781c2a61836348e60c3e8d58fbe015a296b9d5d",
+    "headSha": "29ed614909a6a05a9611cbd6bf4cc712df228c2d",
+    "labels": [
+      "♻️ autoupdate",
+      "🙏 review please"
+    ],
+    "parentSha": "a781c2a61836348e60c3e8d58fbe015a296b9d5d"
+  },
+  "introducing": {
+    "commitSha": "69f726196ac4c104f4be015d5306b82c4a4536e4",
+    "commitDate": "2023-11-02T13:53:55.000Z",
+    "pr": {
+      "number": 4986,
+      "title": "fix(server + client): fix some issues with inferring Record types as procedure outputs",
+      "url": "https://github.com/trpc/trpc/pull/4986",
+      "mergedAt": "2023-11-02T13:53:55Z",
+      "mergeCommitSha": "69f726196ac4c104f4be015d5306b82c4a4536e4",
+      "baseSha": "fa36f73a3ebaf4953320206c469c8a36d7b7e863",
+      "headSha": "c6510acdc75649328c673ea70497010e8fe50209",
+      "changedFiles": 2,
+      "additions": 56,
+      "deletions": 2
+    }
+  },
+  "bugLines": [
+    {
+      "file": "packages/server/src/shared/internal/serialize.ts",
+      "ranges": [
+        [
+          41,
+          41
+        ],
+        [
+          43,
+          43
+        ],
+        [
+          45,
+          45
+        ],
+        [
+          47,
+          47
+        ],
+        [
+          49,
+          49
+        ],
+        [
+          51,
+          51
+        ],
+        [
+          57,
+          57
+        ]
+      ],
+      "fixFile": "packages/server/src/shared/internal/serialize.ts",
+      "fixRanges": [
+        [
+          43,
+          43
+        ],
+        [
+          47,
+          47
+        ],
+        [
+          49,
+          49
+        ],
+        [
+          51,
+          51
+        ],
+        [
+          53,
+          53
+        ],
+        [
+          55,
+          55
+        ],
+        [
+          57,
+          57
+        ],
+        [
+          63,
+          63
+        ],
+        [
+          66,
+          66
+        ],
+        [
+          68,
+          69
+        ],
+        [
+          73,
+          77
+        ],
+        [
+          81,
+          87
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 7,
+  "daysToFix": 53.1
+}

@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "id": "fastapi-15038",
+  "repo": "fastapi/fastapi",
+  "language": "py",
+  "minedAt": "2026-09-23T21:57:07.829Z",
+  "fix": {
+    "number": 15038,
+    "title": "🐛 Fix, avoid yield from a TaskGroup, only as an async context manager, closed in the request async exit stack",
+    "url": "https://github.com/fastapi/fastapi/pull/15038",
+    "mergedAt": "2026-03-01T18:16:03Z",
+    "mergeCommitSha": "8a9258b169dce3e321f614c14b1877c18750d6c7",
+    "baseSha": "60385078233e00f9f13307ff038f12f88fc5c240",
+    "headSha": "65d01e37ea4315f3bb234899a9ebfe08651fbce6",
+    "labels": [
+      "bug"
+    ],
+    "parentSha": "60385078233e00f9f13307ff038f12f88fc5c240"
+  },
+  "introducing": {
+    "commitSha": "22381558446c5d1ac376680a6581dd63b3a04119",
+    "commitDate": "2026-03-01T09:21:52.000Z",
+    "pr": {
+      "number": 15030,
+      "title": "✨ Add support for Server Sent Events",
+      "url": "https://github.com/fastapi/fastapi/pull/15030",
+      "mergedAt": "2026-03-01T09:21:53Z",
+      "mergeCommitSha": "22381558446c5d1ac376680a6581dd63b3a04119",
+      "baseSha": "48d58ae3b6ef4ded5a4794618c00345667256d98",
+      "headSha": "2269bb446a1233118812c9a4a62beb0aaf2054b0",
+      "changedFiles": 23,
+      "additions": 1681,
+      "deletions": 37
+    }
+  },
+  "bugLines": [
+    {
+      "file": "fastapi/routing.py",
+      "ranges": [
+        [
+          529,
+          529
+        ],
+        [
+          546,
+          548
+        ],
+        [
+          554,
+          554
+        ],
+        [
+          557,
+          557
+        ],
+        [
+          559,
+          559
+        ],
+        [
+          564,
+          564
+        ]
+      ],
+      "fixFile": "fastapi/routing.py",
+      "fixRanges": [
+        [
+          529,
+          529
+        ],
+        [
+          546,
+          548
+        ],
+        [
+          554,
+          557
+        ],
+        [
+          559,
+          559
+        ],
+        [
+          564,
+          564
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 8,
+  "daysToFix": 0.4
+}

@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "id": "fastapi-16105",
+  "repo": "fastapi/fastapi",
+  "language": "py",
+  "minedAt": "2026-09-23T21:56:50.883Z",
+  "fix": {
+    "number": 16105,
+    "title": "🐛 Fix support for background tasks and headers from dependencies in `app.frontend()`",
+    "url": "https://github.com/fastapi/fastapi/pull/16105",
+    "mergedAt": "2026-07-29T17:04:36Z",
+    "mergeCommitSha": "d62354434b2e508fe89024213b220ca8e67dea5e",
+    "baseSha": "1d211b9c1009d577f39fa2b19b10d9a93a72a0ed",
+    "headSha": "4cc32869cd52574eeb631cf4c257822ce6b0be8f",
+    "labels": [
+      "bug"
+    ],
+    "parentSha": "1d211b9c1009d577f39fa2b19b10d9a93a72a0ed"
+  },
+  "introducing": {
+    "commitSha": "319be508ce7db9ee5f52c3b9baa68c6cc1037c10",
+    "commitDate": "2026-07-01T16:12:33.000Z",
+    "pr": {
+      "number": 15908,
+      "title": "✨ Support dependencies in `app.frontend()`, e.g. for automatic cookie authentication for the frontend",
+      "url": "https://github.com/fastapi/fastapi/pull/15908",
+      "mergedAt": "2026-07-01T16:12:33Z",
+      "mergeCommitSha": "319be508ce7db9ee5f52c3b9baa68c6cc1037c10",
+      "baseSha": "122f1b58f4e0fabfefef3710a8c8247bb2bd820b",
+      "headSha": "191fff3114bd099a088da5b22cd21a6252247619",
+      "changedFiles": 3,
+      "additions": 563,
+      "deletions": 67
+    }
+  },
+  "bugLines": [
+    {
+      "file": "fastapi/routing.py",
+      "ranges": [
+        [
+          2159,
+          2160
+        ],
+        [
+          2180,
+          2180
+        ],
+        [
+          2198,
+          2198
+        ]
+      ],
+      "fixFile": "fastapi/routing.py",
+      "fixRanges": [
+        [
+          2089,
+          2089
+        ],
+        [
+          2192,
+          2193
+        ],
+        [
+          2213,
+          2213
+        ],
+        [
+          2231,
+          2231
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 4,
+  "daysToFix": 28
+}

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "id": "hono-5297",
+  "repo": "honojs/hono",
+  "language": "ts",
+  "minedAt": "2026-09-23T21:56:31.620Z",
+  "fix": {
+    "number": 5297,
+    "title": "fix(client): keep a param value of \"index\" in $url() and $path()",
+    "url": "https://github.com/honojs/hono/pull/5297",
+    "mergedAt": "2026-08-27T00:17:53Z",
+    "mergeCommitSha": "50b8788cf54cb60112b7cd93642bc5094901475c",
+    "baseSha": "017000d6ad5bc6a65dd0f9215a4fdfea6ea80aea",
+    "headSha": "1680bdbb422609427073c54659144780b3f551ce",
+    "labels": [],
+    "parentSha": "06880c4a2b04de9dd74217f26dd831209b9c01f1"
+  },
+  "introducing": {
+    "commitSha": "3d8abbc2392277a2026ac09fb3929d9cb1ef2065",
+    "commitDate": "2024-10-22T05:14:01.000Z",
+    "pr": {
+      "number": 3541,
+      "title": "fix(client): return query params in $url",
+      "url": "https://github.com/honojs/hono/pull/3541",
+      "mergedAt": "2024-10-22T05:14:01Z",
+      "mergeCommitSha": "3d8abbc2392277a2026ac09fb3929d9cb1ef2065",
+      "baseSha": "f8664b03a66b8e3abf488be0117885137904559b",
+      "headSha": "f49f77ac651c1b13f88052e540eafbe38d766144",
+      "changedFiles": 5,
+      "additions": 70,
+      "deletions": 18
+    }
+  },
+  "bugLines": [
+    {
+      "file": "src/client/client.ts",
+      "ranges": [
+        [
+          163,
+          163
+        ],
+        [
+          166,
+          166
+        ]
+      ],
+      "fixFile": "src/client/client.ts",
+      "fixRanges": [
+        [
+          190,
+          190
+        ],
+        [
+          193,
+          193
+        ],
+        [
+          199,
+          199
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 2,
+  "daysToFix": 673.8
+}

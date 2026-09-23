@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "trpc-7477",
+  "repo": "trpc/trpc",
+  "language": "ts",
+  "minedAt": "2026-09-23T21:57:28.762Z",
+  "fix": {
+    "number": 7477,
+    "title": "fix(server): correct assertIsRequestId boolean logic — non-NaN invalid types passed silently",
+    "url": "https://github.com/trpc/trpc/pull/7477",
+    "mergedAt": "2026-09-12T10:58:52Z",
+    "mergeCommitSha": "3d21d2c1364139938f1d7924802af67b506ca544",
+    "baseSha": "19a0f58c648effba0cb6a8d4c49c43c035576ea5",
+    "headSha": "77250984c661766944f84a5dc4dd54539273b788",
+    "labels": [],
+    "parentSha": "19a0f58c648effba0cb6a8d4c49c43c035576ea5"
+  },
+  "introducing": {
+    "commitSha": "f0977428a8d4ae34d14334bd31f901a9f31100dc",
+    "commitDate": "2023-10-26T09:33:33.000Z",
+    "pr": {
+      "number": 4872,
+      "title": "feat(`server`): extract parseTRPCMessage for 3rd party modules",
+      "url": "https://github.com/trpc/trpc/pull/4872",
+      "mergedAt": "2023-10-26T09:33:33Z",
+      "mergeCommitSha": "f0977428a8d4ae34d14334bd31f901a9f31100dc",
+      "baseSha": "95d91e80207fb30d616b4c576b77bd346254509e",
+      "headSha": "e1c73608d54a4d09501a680303109a4376b57e00",
+      "changedFiles": 3,
+      "additions": 88,
+      "deletions": 79
+    }
+  },
+  "bugLines": [
+    {
+      "file": "packages/server/src/rpc/parseTRPCMessage.ts",
+      "ranges": [
+        [
+          25,
+          27
+        ]
+      ],
+      "fixFile": "packages/server/src/unstable-core-do-not-import/rpc/parseTRPCMessage.ts",
+      "fixRanges": [
+        [
+          26,
+          28
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 3,
+  "daysToFix": 1052.1
+}

@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "id": "hono-5349",
+  "repo": "honojs/hono",
+  "language": "ts",
+  "minedAt": "2026-09-23T21:56:26.822Z",
+  "fix": {
+    "number": 5349,
+    "title": "fix(accept): treat the q parameter name as case-insensitive",
+    "url": "https://github.com/honojs/hono/pull/5349",
+    "mergedAt": "2026-09-12T08:51:07Z",
+    "mergeCommitSha": "65cff90e152dbbbcdde2808af15b48344676edfe",
+    "baseSha": "eebdf7be39abf0a872671835ccce0c4f03ea497a",
+    "headSha": "27be457fd55bee9b0d5884a9a0612e0a6b063aba",
+    "labels": [],
+    "parentSha": "f147de5ea1eeadd4b4851ab075999673e140a303"
+  },
+  "introducing": {
+    "commitSha": "50869562980628b2984f73e064bb80691e5286bc",
+    "commitDate": "2026-03-06T08:30:06.000Z",
+    "pr": {
+      "number": 4758,
+      "title": "fix(accept): replace regex split to mitigate ReDoS",
+      "url": "https://github.com/honojs/hono/pull/4758",
+      "mergedAt": "2026-03-06T08:30:06Z",
+      "mergeCommitSha": "50869562980628b2984f73e064bb80691e5286bc",
+      "baseSha": "df97e5f49771a2a219770515859b9cc1d80abab0",
+      "headSha": "0866c10ffdef43cf3856e8b4375d9d7ee1561d5b",
+      "changedFiles": 2,
+      "additions": 328,
+      "deletions": 45
+    }
+  },
+  "bugLines": [
+    {
+      "file": "src/utils/accept.ts",
+      "ranges": [
+        [
+          224,
+          224
+        ]
+      ],
+      "fixFile": "src/utils/accept.ts",
+      "fixRanges": [
+        [
+          224,
+          224
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 1,
+  "daysToFix": 190
+}

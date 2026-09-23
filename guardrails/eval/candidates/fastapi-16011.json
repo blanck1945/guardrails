@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "id": "fastapi-16011",
+  "repo": "fastapi/fastapi",
+  "language": "py",
+  "minedAt": "2026-09-23T21:56:55.659Z",
+  "fix": {
+    "number": 16011,
+    "title": "🐛 Fix frontend fallback support for doted paths like `/users/john.doe`",
+    "url": "https://github.com/fastapi/fastapi/pull/16011",
+    "mergedAt": "2026-07-16T08:59:24Z",
+    "mergeCommitSha": "eb75fd078e83aed935016bcdf0705cd58bbf0d0e",
+    "baseSha": "9b8410bdc9fa1fd679ea7e65b926535c7045ab87",
+    "headSha": "c2e9c94014bb54a6e3c14db1b4db378829ed4fdd",
+    "labels": [
+      "bug"
+    ],
+    "parentSha": "9b8410bdc9fa1fd679ea7e65b926535c7045ab87"
+  },
+  "introducing": {
+    "commitSha": "4d3dc78b262c609daf8a23baa00f31221b386d52",
+    "commitDate": "2026-06-20T00:20:49.000Z",
+    "pr": {
+      "number": 15800,
+      "title": "✨ Add support for `app.frontend(\"/\", directory=\"dist\")` and `router.frontend(\"/\", directory=\"dist\")`",
+      "url": "https://github.com/fastapi/fastapi/pull/15800",
+      "mergedAt": "2026-06-20T00:20:49Z",
+      "mergeCommitSha": "4d3dc78b262c609daf8a23baa00f31221b386d52",
+      "baseSha": "f1d750fddad90e2faad6c3cc5c85c7687b787e89",
+      "headSha": "5bd3221f492738f5c413e9cc134096d5bd455251",
+      "changedFiles": 15,
+      "additions": 1649,
+      "deletions": 5
+    }
+  },
+  "bugLines": [
+    {
+      "file": "fastapi/routing.py",
+      "ranges": [
+        [
+          1922,
+          1925
+        ],
+        [
+          1927,
+          1928
+        ],
+        [
+          1932,
+          1939
+        ]
+      ],
+      "fixFile": "fastapi/routing.py",
+      "fixRanges": [
+        [
+          1987,
+          1990
+        ],
+        [
+          1992,
+          1993
+        ],
+        [
+          1997,
+          2004
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 14,
+  "daysToFix": 26.4
+}

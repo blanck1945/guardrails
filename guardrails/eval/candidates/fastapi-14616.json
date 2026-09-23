@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "id": "fastapi-14616",
+  "repo": "fastapi/fastapi",
+  "language": "py",
+  "minedAt": "2026-09-23T21:57:12.020Z",
+  "fix": {
+    "number": 14616,
+    "title": "🐛 Fix using `Json[list[str]]` type (issue #10997)",
+    "url": "https://github.com/fastapi/fastapi/pull/14616",
+    "mergedAt": "2026-02-05T18:41:43Z",
+    "mergeCommitSha": "c5fd75a321496b1f8212744bde217ec8ea956154",
+    "baseSha": "54f8aeeb9a15e4d5a12401ec5549840966df0087",
+    "headSha": "5f7fa6a62dd5943cee979c1385094d1273500213",
+    "labels": [
+      "bug"
+    ],
+    "parentSha": "54f8aeeb9a15e4d5a12401ec5549840966df0087"
+  },
+  "introducing": {
+    "commitSha": "7bad7c09757f8a06cf62cc0838082a766065883e",
+    "commitDate": "2024-09-05T15:16:50.000Z",
+    "pr": {
+      "number": 12129,
+      "title": "✨ Add support for Pydantic models in `Form` parameters",
+      "url": "https://github.com/fastapi/fastapi/pull/12129",
+      "mergedAt": "2024-09-05T15:16:50Z",
+      "mergeCommitSha": "7bad7c09757f8a06cf62cc0838082a766065883e",
+      "baseSha": "965fc8301e8fa7a7228bee33873387f4852a30df",
+      "headSha": "5acca6e1757c873eb644f87740ce05bb01859eb8",
+      "changedFiles": 13,
+      "additions": 994,
+      "deletions": 3
+    }
+  },
+  "bugLines": [
+    {
+      "file": "fastapi/dependencies/utils.py",
+      "ranges": [
+        [
+          60,
+          60
+        ]
+      ],
+      "fixFile": "fastapi/dependencies/utils.py",
+      "fixRanges": [
+        [
+          54,
+          54
+        ],
+        [
+          733,
+          733
+        ]
+      ]
+    }
+  ],
+  "blamedLines": 1,
+  "daysToFix": 518.1
+}
