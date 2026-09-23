@@ -1,5 +1,6 @@
 import { safeParseConfig, reviewDiff, type ReviewInput } from "@/core";
 import { commentableLines } from "./diff";
+import { DEFAULT_IGNORES, isIgnored } from "@/core/paths";
 import { installationOctokit } from "./github";
 
 export interface PullRequestEvent {
@@ -46,9 +47,9 @@ export async function reviewPullRequest(ev: PullRequestEvent) {
 
   const { config, errors: configErrors } = safeParseConfig(rawConfig);
   if (configErrors.length) console.warn("guardrails: invalid config, using defaults for affected fields", configErrors);
-  const ignored = config.ignorePatterns.map(globToRegExp);
+  const ignored = [...DEFAULT_IGNORES, ...config.ignorePatterns];
   const reviewable = files.filter(
-    (f) => f.patch && f.status !== "removed" && !ignored.some((r) => r.test(f.filename)),
+    (f) => f.patch && f.status !== "removed" && !isIgnored(f.filename, ignored),
   );
   if (!reviewable.length) return;
 
@@ -108,13 +109,4 @@ export async function reviewPullRequest(ev: PullRequestEvent) {
         (f.suggestion ? `\n\n\`\`\`suggestion\n${f.suggestion}\n\`\`\`` : ""),
     })),
   });
-}
-
-function globToRegExp(glob: string): RegExp {
-  const re = glob
-    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
-    .replace(/\*\*/g, "\u0000")
-    .replace(/\*/g, "[^/]*")
-    .replace(/\u0000/g, ".*");
-  return new RegExp(`^${re}$`);
 }
