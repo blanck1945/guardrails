@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "pnpm typecheck && pnpm test"
   },
   "dependencies": {
     "ai": "^7.0.112",
@@ -18,6 +20,7 @@
   "devDependencies": {
     "@types/node": "^26.6.2",
     "@types/react": "^19.3.0",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.1"
   }
 }
