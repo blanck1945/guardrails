@@ -1,0 +1,142 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Plan Guardrails</title><style>
+:root{--bg:#fff;--fg:#1c1c1e;--mu:#6b6b70;--bd:#e4e4e7;--cd:#f5f5f7;--ac:#4f46e5}
+@media(prefers-color-scheme:dark){:root{--bg:#131316;--fg:#ececef;--mu:#9a9aa2;--bd:#2c2c31;--cd:#1d1d22;--ac:#8b85ff}}
+body{background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,sans-serif;margin:0}
+main{max-width:860px;margin:0 auto;padding:32px 16px 80px}
+h1{font-size:2rem}h2{margin-top:2.4rem;border-bottom:1px solid var(--bd);padding-bottom:.3rem}h3{color:var(--ac);margin-top:1.6rem}
+code{background:var(--cd);padding:.1em .35em;border-radius:4px;font-size:.9em}
+pre{background:var(--cd);border:1px solid var(--bd);padding:14px;border-radius:8px;overflow-x:auto;font-size:.82rem;line-height:1.4}
+.t{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:.92rem}
+th,td{border:1px solid var(--bd);padding:8px 10px;text-align:left;vertical-align:top}th{background:var(--cd)}
+.n{margin:.3rem 0}li{margin:.25rem 0}
+</style></head><body><main><h1>Guardrails — clon de Greptile (versión cloud primero)</h1>
+<p>Fuente del análisis: greptile.com, su pricing, docs y blog (consultado 2026-09-23).</p>
+<p>Código en <code>guardrails/</code>.</p>
+<h2>1. Qué es Greptile</h2>
+<p>Revisor de PRs con IA que analiza cada pull request con <strong>contexto de todo el codebase</strong>, no solo del diff.</p>
+<div class="t"><table>
+<tr><th>Área</th><th>Qué hace</th></tr>
+<tr><td>Indexado</td><td>Grafo del codebase: funciones, clases, dependencias</td></tr>
+<tr><td>Agente</td><td>Agente propio que navega el filesystem del repo con la terminal para juntar contexto; multi-modelo (no publican cuáles)</td></tr>
+<tr><td>Review</td><td>Agentes en paralelo: diff, impacto fuera de lo modificado, problemas entre archivos</td></tr>
+<tr><td>Filtro de ruido</td><td>Embeddings por equipo de comentarios aceptados/rechazados; bloquea los parecidos a 3+ rechazados. Subió la tasa de atención de 19% a 55%+</td></tr>
+<tr><td>Reglas</td><td>Custom rules en lenguaje natural con scope y severidad; style guides del propio repo; reglas sugeridas tras ~10 PRs</td></tr>
+<tr><td>Config</td><td><code>strictness</code> 1–3, <code>commentTypes</code>, triggers, filtros de PR, <code>ignorePatterns</code>, <code>instructions</code>, contexto multi-repo</td></tr>
+<tr><td>Ejecución</td><td>Cloud (SOC 2) o self-hosted (Docker/K8s). El agente corre en contenedor rootless de Podman</td></tr>
+<tr><td>Integraciones</td><td>MCP, plugin de Claude Code, Cursor, Codex, Devin</td></tr>
+<tr><td>Precio</td><td>Free 1 dev · Pro $30/seat · Enterprise custom · 1 crédito = 1 review</td></tr>
+</table></div>
+<p>No tienen rule sets predefinidos. Eso queda como oportunidad de diferenciación.</p>
+<h2>2. Modelo de ejecución</h2>
+<p>No corre dentro de GitHub/GitLab. Es un <strong>servicio externo</strong> que se conecta por webhooks y API.</p>
+<pre>
+PR abierto/actualizado
+   │  webhook (firmado)
+   ▼
+API (recibe, verifica firma, encola)
+   ▼
+Worker en sandbox efímero
+   1. clona el repo (token de GitHub App, scope al repo, corta duración)
+   2. corre el agente con tools: read_file, grep, find_references
+   3. el agente llama al LLM por API (el LLM solo ve lo que el agente le pide)
+   4. filtra ruido (confianza + feedback previo)
+   5. postea el review inline en el PR por la API de GitHub
+   6. destruye el sandbox
+   ▼
+Persistente: Postgres + pgvector (índice, embeddings, reglas, feedback)
+</pre>
+<ul>
+<li>K8s/EKS no hace falta para SaaS. Solo si se vende self-hosting.</li>
+<li>Sandbox: Vercel Sandbox o contenedores propios (Fly/ECS). No una función serverless común.</li>
+<li>LLM vía AI Gateway / AI SDK, intercambiable.</li>
+</ul>
+<h2>3. Decisiones de arquitectura</h2>
+<p class="n">1. <strong>El núcleo es una librería que no sabe de GitHub:</strong> <code>reviewDiff({ repoPath, diff, config })</code>. Todo lo demás son envoltorios:</p>
+<p>   - Cloud: webhook → worker → núcleo → comentarios en el PR.</p>
+<p>   - CLI local (después): <code>guardrails review</code> sobre el diff local, para pre-push.</p>
+<p class="n">2. <strong>Cloud primero</strong>, porque es el punto de control del equipo y lo que se cobra. El CLI local reusa el núcleo.</p>
+<p class="n">3. <strong>Escalera de contexto</strong> (cuanto más contexto, menos input del usuario):</p>
+<p class="n">1. Automático: README, <code>CONTRIBUTING.md</code>, linters, tsconfig, convenciones del repo.</p>
+<p class="n">2. Aprendido: comentarios de PRs pasados y feedback → reglas propuestas.</p>
+<p class="n">3. Explícito: reglas en lenguaje natural; un LLM las estructura a <code>{id, rule, scope, severity}</code> y el usuario aprueba.</p>
+<p class="n">4. Ajuste fino: strictness, ignores, filtros.</p>
+<h2>4. Configuración del usuario (<code>.guardrails/config.json</code>)</h2>
+<pre>
+{
+  &quot;strictness&quot;: 2,
+  &quot;commentTypes&quot;: [&quot;logic&quot;, &quot;security&quot;, &quot;style&quot;],
+  &quot;ignorePatterns&quot;: [&quot;dist/**&quot;, &quot;**/*.generated.ts&quot;],
+  &quot;instructions&quot;: &quot;Preferimos composición sobre herencia.&quot;,
+  &quot;rules&quot;: [
+    {
+      &quot;id&quot;: &quot;no-raw-sql&quot;,
+      &quot;rule&quot;: &quot;Use parameterized queries. Never interpolate user input into SQL.&quot;,
+      &quot;scope&quot;: [&quot;src/db/**&quot;],
+      &quot;severity&quot;: &quot;high&quot;
+    }
+  ],
+  &quot;files&quot;: [{ &quot;path&quot;: &quot;CONTRIBUTING.md&quot; }]
+}
+</pre>
+<p>Config por directorio con herencia en cascada (fase posterior).</p>
+<h2>5. Stack</h2>
+<ul>
+<li>TypeScript, Next.js (API + dashboard), Postgres + pgvector</li>
+<li>Cola: Inngest / Trigger.dev / Vercel Workflow</li>
+<li>tree-sitter para parsing (Fase 2)</li>
+<li>LLM: Claude vía AI SDK / AI Gateway</li>
+<li>Octokit (<code>@octokit/app</code>) para la GitHub App</li>
+</ul>
+<h2>6. Fases</h2>
+<h3>Fase 0 — Núcleo + evaluación (en curso)</h3>
+<ul>
+<li>Librería <code>core</code>: config (zod), tipos, <code>reviewDiff</code>, contrato del LLM.</li>
+<li>Set de evaluación: PRs con bugs conocidos para medir bugs vs. ruido.</li>
+</ul>
+<h3>Fase 1 — Cloud MVP (en curso)</h3>
+<ul>
+<li>GitHub App + endpoint de webhook con verificación de firma.</li>
+<li>Cola y worker: clonar, correr el núcleo, postear review inline.</li>
+<li>Contexto simple: archivos cambiados + archivos vecinos + reglas del config.</li>
+<li>Un agente + filtro de confianza.</li>
+<li>Dashboard mínimo: repos y reviews.</li>
+</ul>
+<h3>Fase 2 — Contexto de codebase y filtro por feedback</h3>
+<ul>
+<li>Indexado tree-sitter, grafo de símbolos, embeddings en pgvector; reindexado incremental.</li>
+<li>Tools <code>find_references</code>, <code>search_code</code>.</li>
+<li>Agentes especializados en paralelo + verificador que intenta refutar.</li>
+<li>Filtro de ruido por embeddings de feedback (aceptados/rechazados).</li>
+</ul>
+<h3>Fase 3 — Aprendizaje y reglas</h3>
+<ul>
+<li>Reglas en lenguaje natural estructuradas por LLM con aprobación.</li>
+<li>Reglas sugeridas desde comentarios de PRs pasados.</li>
+<li>Chat en el PR (<code>@bot re-review</code>, explicar).</li>
+</ul>
+<h3>Fase 4 — Producto</h3>
+<ul>
+<li>Billing por créditos, multi-org, métricas, GitLab, MCP server.</li>
+<li>Packs de reglas predefinidos (seguridad/OWASP, React, Next.js, SQL).</li>
+</ul>
+<h3>Fase 5 — CLI local y enterprise</h3>
+<ul>
+<li>CLI <code>guardrails review</code> + hook pre-push sobre el mismo núcleo.</li>
+<li>Agente de tests en sandbox, auto-fix, self-hosting, SSO, SOC 2.</li>
+</ul>
+<h2>7. Riesgos</h2>
+<div class="t"><table>
+<tr><th>Riesgo</th><th>Mitigación</th></tr>
+<tr><td>Ruido / falsos positivos</td><td>Verificador, umbral de confianza, feedback loop, set de evaluación desde Fase 0</td></tr>
+<tr><td>Costo por review</td><td>Triage con modelo barato, prompt caching, tope de tokens por PR</td></tr>
+<tr><td>Repos enormes</td><td>Indexado incremental, presupuesto de contexto</td></tr>
+<tr><td>Código del cliente</td><td>Sandbox efímero, token de corta duración, borrar el clon, retención mínima</td></tr>
+<tr><td>Competencia</td><td>Packs de reglas, menos configuración, precio, integración con agentes</td></tr>
+</table></div>
+<h2>8. Decisiones abiertas</h2>
+<ul>
+<li>¿Producto para vender o proyecto propio?</li>
+<li>Lenguajes objetivo del MVP (sugerido: TS/JS y Python).</li>
+<li>Precio: por seat o por review.</li>
+<li>Proveedor del sandbox.</li>
+</ul></main></body></html>
