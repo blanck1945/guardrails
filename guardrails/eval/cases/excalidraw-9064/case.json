@@ -1,0 +1,10 @@
+{
+  "id": "excalidraw-9064",
+  "repo": "https://github.com/excalidraw/excalidraw",
+  "baseSha": "a3e1619635cec683eea806e18c870fd6d963b986",
+  "headSha": "dc56b9bd2f46495458d13664098837a93ddb96b3",
+  "source": "clean",
+  "language": "ts",
+  "validated": false,
+  "bugs": []
+}

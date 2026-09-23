@@ -1,0 +1,20 @@
+{
+  "id": "hono-5373",
+  "repo": "https://github.com/honojs/hono",
+  "baseSha": "f5a53463ad2ff791fc02418b645750ce75a260ad",
+  "headSha": "bb5188235746f917f92ea2f707211b96fec1c260",
+  "source": "szz",
+  "language": "ts",
+  "validated": false,
+  "bugs": [
+    {
+      "file": "src/router/linear-router/router.ts",
+      "lines": [114, 119],
+      "description": "SEED (schema fixture, not curated): LinearRouter matches an empty path segment as a param (/u//posts). Lines are from the pre-fix code in PR #5373, which is the fix PR, not the introducing PR.",
+      "severity": "medium",
+      "category": "logic",
+      "crossFile": false,
+      "relatedFiles": []
+    }
+  ]
+}

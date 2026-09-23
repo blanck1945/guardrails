@@ -1,0 +1,20 @@
+{
+  "id": "fastapi-15515",
+  "repo": "https://github.com/fastapi/fastapi",
+  "baseSha": "31ce3cb8d73a6e20221315a90dd98a117f0101a0",
+  "headSha": "871cfe7ea8cb922902ed9e140ec40db2722caf4a",
+  "source": "szz",
+  "language": "py",
+  "validated": false,
+  "bugs": [
+    {
+      "file": "fastapi/sse.py",
+      "lines": [214, 222],
+      "description": "SEED (schema fixture, not curated): format_sse_event uses str.splitlines(), which splits on characters that are not SSE line terminators. Lines are from the pre-fix code in PR #15515 (the fix PR, not the introducing PR).",
+      "severity": "medium",
+      "category": "logic",
+      "crossFile": false,
+      "relatedFiles": []
+    }
+  ]
+}

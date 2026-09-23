@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-09-23",
+  "criteria": "OSI license; >=4 commits in the last 28 days (>=1/week); a bug label on the issue tracker. Checked via the GitHub API (gh).",
+  "repos": [
+    { "repo": "calcom/cal.com", "url": "https://github.com/calcom/cal.com", "language": "ts", "role": "cases", "license": "MIT", "commitsLast28d": 14, "bugLabel": "🐛 bug" },
+    { "repo": "excalidraw/excalidraw", "url": "https://github.com/excalidraw/excalidraw", "language": "ts", "role": "cases", "license": "MIT", "commitsLast28d": 15, "bugLabel": "bug" },
+    { "repo": "honojs/hono", "url": "https://github.com/honojs/hono", "language": "ts", "role": "cases", "license": "MIT", "commitsLast28d": 27, "bugLabel": "bug" },
+    { "repo": "trpc/trpc", "url": "https://github.com/trpc/trpc", "language": "ts", "role": "cases", "license": "MIT", "commitsLast28d": 33, "bugLabel": "🐛 bug" },
+    { "repo": "drizzle-team/drizzle-orm", "url": "https://github.com/drizzle-team/drizzle-orm", "language": "ts", "role": "cases", "license": "Apache-2.0", "commitsLast28d": 5, "bugLabel": "bug" },
+    { "repo": "immich-app/immich", "url": "https://github.com/immich-app/immich", "language": "ts", "role": "cases", "license": "AGPL-3.0", "commitsLast28d": 100, "bugLabel": "changelog:bugfix", "note": "No plain 'bug' label; 'changelog:bugfix' marks fix PRs. commitsLast28d is capped by the API page size (100)." },
+    { "repo": "fastapi/fastapi", "url": "https://github.com/fastapi/fastapi", "language": "py", "role": "cases", "license": "MIT", "commitsLast28d": 18, "bugLabel": "bug" },
+    { "repo": "home-assistant/core", "url": "https://github.com/home-assistant/core", "language": "py", "role": "latency", "license": "Apache-2.0", "commitsLast28d": 100, "bugLabel": "bug", "note": "Large repo: clone/latency measurements only (PLAN-DETAILED 7.1)." }
+  ],
+  "excluded": [
+    { "repo": "outline/outline", "reason": "License is not OSI (GitHub reports NOASSERTION/Other; Outline is BSL 1.1)." },
+    { "repo": "encode/httpx", "reason": "0 commits in the last 28 days (last push 2026-03-29)." },
+    { "repo": "pallets/flask", "reason": "1 commit in the last 28 days (<1/week)." }
+  ]
+}
