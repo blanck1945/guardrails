@@ -1,4 +1,4 @@
-import { parseConfig, reviewDiff, type ReviewInput } from "@/core";
+import { safeParseConfig, reviewDiff, type ReviewInput } from "@/core";
 import { commentableLines } from "./diff";
 import { installationOctokit } from "./github";
 
@@ -44,7 +44,8 @@ export async function reviewPullRequest(ev: PullRequestEvent) {
     readFile(octo, owner, repo, ".guardrails/config.json", headSha),
   ]);
 
-  const config = parseConfig(rawConfig);
+  const { config, errors: configErrors } = safeParseConfig(rawConfig);
+  if (configErrors.length) console.warn("guardrails: invalid config, using defaults for affected fields", configErrors);
   const ignored = config.ignorePatterns.map(globToRegExp);
   const reviewable = files.filter(
     (f) => f.patch && f.status !== "removed" && !ignored.some((r) => r.test(f.filename)),
