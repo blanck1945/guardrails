@@ -1,7 +1,7 @@
 import type { GuardrailsConfig } from "./config";
 import type { ReviewInput } from "./types";
 
-const STRICTNESS = {
+export const STRICTNESS = {
   1: "Report only definite, high-impact bugs. Skip anything you are not sure about.",
   2: "Report likely bugs and meaningful risks. Skip nitpicks.",
   3: "Be thorough. Report bugs, risks and smaller issues.",

@@ -1,3 +1,3 @@
 export * from "./config";
 export * from "./types";
-export { reviewDiff } from "./review";
+export { reviewDiff, type ReviewMode, type ReviewOptions, type ReviewOutput } from "./review";
