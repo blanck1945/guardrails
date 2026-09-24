@@ -1,5 +1,6 @@
 import { parseArgs } from "node:util";
 import { loadCases, loadRepos } from "./loader";
+import { mineInject } from "./mine/inject";
 import { mineSzz } from "./mine/szz";
 
 async function validate(): Promise<number> {
@@ -16,10 +17,36 @@ async function validate(): Promise<number> {
   return all.length === 0 ? 0 : 1;
 }
 
-const MINE_USAGE = "Usage: pnpm eval mine szz --repo owner/name [--repo ...] [--limit N] [--max-pages N]";
+const MINE_USAGE = [
+  "Usage: pnpm eval mine szz --repo owner/name [--repo ...] [--limit N] [--max-pages N]",
+  "       pnpm eval mine inject --repo owner/name [--repo ...] --count N   (count per repo)",
+].join("\n");
+
+async function mineInjectCmd(rest: string[]): Promise<number> {
+  const { values } = parseArgs({ args: rest, options: { repo: { type: "string", multiple: true }, count: { type: "string", default: "5" } } });
+  const count = Number(values.count);
+  if (!values.repo?.length || !Number.isInteger(count) || count < 1) {
+    console.error(MINE_USAGE);
+    return 2;
+  }
+  let code = 0;
+  for (const repo of values.repo) {
+    console.log(`== inject ${repo} (count ${count})`);
+    try {
+      const r = await mineInject({ repo, count, log: (m) => console.log(m) });
+      console.log(`${repo}: ${r.created} created (${r.crossFile} cross-file), ${r.existing} pre-existing, scanned ${r.scanned} PR commits` + (r.shortfall ? `; SHORTFALL ${r.shortfall}` : ""));
+      if (r.shortfall) code = 1;
+    } catch (e) {
+      console.error(`${repo}: ${e instanceof Error ? e.message : String(e)}`);
+      code = 1;
+    }
+  }
+  return code;
+}
 
 async function mine(argv: string[]): Promise<number> {
   const [sub, ...rest] = argv;
+  if (sub === "inject") return mineInjectCmd(rest);
   if (sub !== "szz") {
     console.error(MINE_USAGE);
     return 2;

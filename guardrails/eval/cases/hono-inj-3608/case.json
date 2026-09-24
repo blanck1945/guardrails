@@ -1,0 +1,25 @@
+{
+  "id": "hono-inj-3608",
+  "repo": "https://github.com/honojs/hono",
+  "baseSha": "e9830c6ba19052d81ef0aeba9d65a1a130f7cf9e",
+  "headSha": "578274c950b131b8dfd04f4b216677768ba530b0",
+  "source": "injected",
+  "language": "ts",
+  "validated": false,
+  "bugs": [
+    {
+      "file": "src/helper/cookie/index.ts",
+      "lines": [
+        39,
+        39
+      ],
+      "description": "INJECTED (return-value-dropped): Return value dropped in an exported function; callers still use the result. `return <value>` replaced by an empty return in `parse` (callers still consume the result). Mutated src/utils/cookie.ts:82: `return {}` -> `return;`. The bug manifests in src/helper/cookie/index.ts:39: `const obj = parse(cookie, finalKey)`.",
+      "severity": "high",
+      "category": "api-contract",
+      "crossFile": true,
+      "relatedFiles": [
+        "src/utils/cookie.ts"
+      ]
+    }
+  ]
+}

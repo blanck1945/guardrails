@@ -1,0 +1,23 @@
+{
+  "id": "trpc-inj-7039",
+  "repo": "https://github.com/trpc/trpc",
+  "baseSha": "fd3350cdbe84717deb9622b0217abe49948a8345",
+  "headSha": "b3f5f0913b4b1dfaf206b6b2883668084b507379",
+  "source": "injected",
+  "language": "ts",
+  "validated": false,
+  "bugs": [
+    {
+      "file": "packages/server/src/adapters/aws-lambda/getPlanner.ts",
+      "lines": [
+        145,
+        145
+      ],
+      "description": "INJECTED (missing-await): Missing await on an async call. `await` removed (the promise/coroutine is used unresolved). Mutated packages/server/src/adapters/aws-lambda/getPlanner.ts:145: `await pipeline(Readable.fromWeb(response.body as any), responseStream);` -> `pipeline(Readable.fromWeb(response.body as any), responseStream);`.",
+      "severity": "high",
+      "category": "async",
+      "crossFile": false,
+      "relatedFiles": []
+    }
+  ]
+}

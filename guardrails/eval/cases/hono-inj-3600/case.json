@@ -1,0 +1,23 @@
+{
+  "id": "hono-inj-3600",
+  "repo": "https://github.com/honojs/hono",
+  "baseSha": "1af7e58ae03608e17fb0a08a70a1efe2a3121d7d",
+  "headSha": "4a2a9c9c26d5b7891e9f6b1a279993db8e425f2a",
+  "source": "injected",
+  "language": "ts",
+  "validated": false,
+  "bugs": [
+    {
+      "file": "src/client/client.ts",
+      "lines": [
+        83,
+        83
+      ],
+      "description": "INJECTED (null-check-removed): Null/undefined guard removed. optional chaining `?.` replaced by `.` (throws on null/undefined). Mutated src/client/client.ts:83: `...args?.header,` -> `...args.header,`.",
+      "severity": "high",
+      "category": "null-safety",
+      "crossFile": false,
+      "relatedFiles": []
+    }
+  ]
+}

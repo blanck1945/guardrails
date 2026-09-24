@@ -1,0 +1,25 @@
+{
+  "id": "fastapi-inj-16071",
+  "repo": "https://github.com/fastapi/fastapi",
+  "baseSha": "7ac0f1b541b8df5921b45486a5c72a49965d00af",
+  "headSha": "1f5489fefa38235eab7331e87502f19c1e812862",
+  "source": "injected",
+  "language": "py",
+  "validated": false,
+  "bugs": [
+    {
+      "file": "fastapi/routing.py",
+      "lines": [
+        859,
+        859
+      ],
+      "description": "INJECTED (return-value-dropped): Return value dropped in an exported function; callers still use the result. `return <value>` replaced by an empty return in `_get_flat_body_params` (callers still consume the result). Mutated fastapi/dependencies/utils.py:229: `return body_params` -> `return None`. The bug manifests in fastapi/routing.py:859: `body_params = _get_flat_body_params(dependant)`.",
+      "severity": "high",
+      "category": "api-contract",
+      "crossFile": true,
+      "relatedFiles": [
+        "fastapi/dependencies/utils.py"
+      ]
+    }
+  ]
+}

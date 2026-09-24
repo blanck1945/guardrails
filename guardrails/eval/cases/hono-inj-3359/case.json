@@ -1,0 +1,25 @@
+{
+  "id": "hono-inj-3359",
+  "repo": "https://github.com/honojs/hono",
+  "baseSha": "fa1954001c6cd451f9879bc1d022d9c85531810e",
+  "headSha": "48acec7f41d5731d7f918186898ad9861318e875",
+  "source": "injected",
+  "language": "ts",
+  "validated": false,
+  "bugs": [
+    {
+      "file": "src/middleware/basic-auth/index.ts",
+      "lines": [
+        78,
+        78
+      ],
+      "description": "INJECTED (return-value-dropped): Return value dropped in an exported function; callers still use the result. `return <value>` replaced by an empty return in `auth` (callers still consume the result). Mutated src/utils/basic-auth.ts:25: `return { username: userPass[1], password: userPass[2] }` -> `return;`. The bug manifests in src/middleware/basic-auth/index.ts:78: `const requestUser = auth(ctx.req.raw)`.",
+      "severity": "high",
+      "category": "api-contract",
+      "crossFile": true,
+      "relatedFiles": [
+        "src/utils/basic-auth.ts"
+      ]
+    }
+  ]
+}

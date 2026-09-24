@@ -1,0 +1,23 @@
+{
+  "id": "hono-inj-5329",
+  "repo": "https://github.com/honojs/hono",
+  "baseSha": "8755b17fbcfdee76511eeb460e18e94e6c9a8d30",
+  "headSha": "62a49f9a54fe175a3a513b100218826aef54b396",
+  "source": "injected",
+  "language": "ts",
+  "validated": false,
+  "bugs": [
+    {
+      "file": "src/jsx/dom/render.ts",
+      "lines": [
+        598,
+        598
+      ],
+      "description": "INJECTED (inverted-condition): Condition inverted. `!==` became `===`. Mutated src/jsx/dom/render.ts:598: `if (i !== -1) {` -> `if (i === -1) {`.",
+      "severity": "high",
+      "category": "logic",
+      "crossFile": false,
+      "relatedFiles": []
+    }
+  ]
+}

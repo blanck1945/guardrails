@@ -1,0 +1,25 @@
+{
+  "id": "fastapi-inj-15785",
+  "repo": "https://github.com/fastapi/fastapi",
+  "baseSha": "7feb17f80a483e70efa26f01addb94d0070d42ee",
+  "headSha": "5fc3aea7b3062ab256662183e743c3f737ff1dab",
+  "source": "injected",
+  "language": "py",
+  "validated": false,
+  "bugs": [
+    {
+      "file": "fastapi/openapi/utils.py",
+      "lines": [
+        496,
+        496
+      ],
+      "description": "INJECTED (declaration-renamed): Exported function renamed without updating its callers. `iter_route_contexts` renamed to `iter_route_contextsV2` in its declaration only; callers still use `iter_route_contexts`. Mutated fastapi/routing.py:1698: `def iter_route_contexts(` -> `def iter_route_contextsV2(`. The bug manifests in fastapi/openapi/utils.py:496: `for route_context in routing.iter_route_contexts(routes):`.",
+      "severity": "high",
+      "category": "api-contract",
+      "crossFile": true,
+      "relatedFiles": [
+        "fastapi/routing.py"
+      ]
+    }
+  ]
+}

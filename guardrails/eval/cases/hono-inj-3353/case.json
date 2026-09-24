@@ -1,0 +1,23 @@
+{
+  "id": "hono-inj-3353",
+  "repo": "https://github.com/honojs/hono",
+  "baseSha": "e4cc5aae735ece2a3538a288f785e049161e87b1",
+  "headSha": "2d2c75c5fd98dc8c0f8fc4031fc326c29aa25466",
+  "source": "injected",
+  "language": "ts",
+  "validated": false,
+  "bugs": [
+    {
+      "file": "src/utils/body.ts",
+      "lines": [
+        104,
+        104
+      ],
+      "description": "INJECTED (null-check-removed): Null/undefined guard removed. optional chaining `?.` replaced by `.` (throws on null/undefined). Mutated src/utils/body.ts:104: `contentType?.startsWith('multipart/form-data') ||` -> `contentType.startsWith('multipart/form-data') ||`.",
+      "severity": "high",
+      "category": "null-safety",
+      "crossFile": false,
+      "relatedFiles": []
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "id": "trpc-inj-7200",
+  "repo": "https://github.com/trpc/trpc",
+  "baseSha": "e8700515ccf304e0f4272148e7650f3861ce11cf",
+  "headSha": "f2967d3cdebee4d107e3a411bb3f4c671509ce11",
+  "source": "injected",
+  "language": "ts",
+  "validated": false,
+  "bugs": [
+    {
+      "file": "packages/server/src/adapters/node-http/writeResponse.ts",
+      "lines": [
+        76,
+        76
+      ],
+      "description": "INJECTED (inverted-condition): Condition inverted. `===` became `!==`. Mutated packages/server/src/adapters/node-http/writeResponse.ts:76: `if (key.toLowerCase() === 'set-cookie') continue;` -> `if (key.toLowerCase() !== 'set-cookie') continue;`.",
+      "severity": "high",
+      "category": "logic",
+      "crossFile": false,
+      "relatedFiles": []
+    }
+  ]
+}

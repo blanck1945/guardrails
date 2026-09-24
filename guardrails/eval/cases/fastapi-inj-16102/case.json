@@ -1,0 +1,23 @@
+{
+  "id": "fastapi-inj-16102",
+  "repo": "https://github.com/fastapi/fastapi",
+  "baseSha": "628663f4f899c465da423bce681c7adf9a218948",
+  "headSha": "7458354efe4f45b82cb843f81a121fd15a342495",
+  "source": "injected",
+  "language": "py",
+  "validated": false,
+  "bugs": [
+    {
+      "file": "fastapi/routing.py",
+      "lines": [
+        1885,
+        1885
+      ],
+      "description": "INJECTED (inverted-condition): Condition inverted. `!=` became `==`. Mutated fastapi/routing.py:1885: `if check_dir != \"auto\":` -> `if check_dir == \"auto\":`.",
+      "severity": "high",
+      "category": "logic",
+      "crossFile": false,
+      "relatedFiles": []
+    }
+  ]
+}

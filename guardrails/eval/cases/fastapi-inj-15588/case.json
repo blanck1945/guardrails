@@ -1,0 +1,23 @@
+{
+  "id": "fastapi-inj-15588",
+  "repo": "https://github.com/fastapi/fastapi",
+  "baseSha": "cb83b83dcf78eab4ea17d504db5abcda705fbdc4",
+  "headSha": "293fc2d80ea962e44280bb2bac06879a7833f4fa",
+  "source": "injected",
+  "language": "py",
+  "validated": false,
+  "bugs": [
+    {
+      "file": "fastapi/sse.py",
+      "lines": [
+        37,
+        37
+      ],
+      "description": "INJECTED (logical-operator-swap): Logical operator swapped (and/or). `and` became `or` in a condition. Mutated fastapi/sse.py:37: `if v is not None and (\"\\r\" in v or \"\\n\" in v):` -> `if v is not None or (\"\\r\" in v or \"\\n\" in v):`.",
+      "severity": "medium",
+      "category": "logic",
+      "crossFile": false,
+      "relatedFiles": []
+    }
+  ]
+}

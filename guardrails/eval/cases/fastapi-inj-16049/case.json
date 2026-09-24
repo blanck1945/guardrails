@@ -1,0 +1,23 @@
+{
+  "id": "fastapi-inj-16049",
+  "repo": "https://github.com/fastapi/fastapi",
+  "baseSha": "ae031be7b5a2df589f63f4d25389cf07b7b8fc86",
+  "headSha": "bf90ffdeb1ebf9d9427479ff5012ee35bc3d0161",
+  "source": "injected",
+  "language": "py",
+  "validated": false,
+  "bugs": [
+    {
+      "file": "fastapi/dependencies/models.py",
+      "lines": [
+        105,
+        105
+      ],
+      "description": "INJECTED (null-check-removed): Null/undefined guard removed. `x is not None and` guard removed. Mutated fastapi/dependencies/models.py:105: `if cached is not None and cached[0] is dependant:` -> `if cached[0] is dependant:`.",
+      "severity": "high",
+      "category": "null-safety",
+      "crossFile": false,
+      "relatedFiles": []
+    }
+  ]
+}

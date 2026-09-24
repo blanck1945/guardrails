@@ -1,0 +1,23 @@
+{
+  "id": "trpc-inj-7411",
+  "repo": "https://github.com/trpc/trpc",
+  "baseSha": "f8f0c0e3979ecb980d38e9369fa8c98df95d212b",
+  "headSha": "aa5c26ffd68a764defcc2031a356144ed93af9ef",
+  "source": "injected",
+  "language": "ts",
+  "validated": false,
+  "bugs": [
+    {
+      "file": "packages/openapi/src/generate.ts",
+      "lines": [
+        1440,
+        1440
+      ],
+      "description": "INJECTED (null-check-removed): Null/undefined guard removed. optional chaining `?.` replaced by `.` (throws on null/undefined). Mutated packages/openapi/src/generate.ts:1440: `...(options.servers?.length ? { servers: options.servers } : {}),` -> `...(options.servers.length ? { servers: options.servers } : {}),`.",
+      "severity": "high",
+      "category": "null-safety",
+      "crossFile": false,
+      "relatedFiles": []
+    }
+  ]
+}

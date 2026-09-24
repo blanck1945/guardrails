@@ -1,0 +1,25 @@
+{
+  "id": "trpc-inj-7044",
+  "repo": "https://github.com/trpc/trpc",
+  "baseSha": "61448a79a0111694812e3cf0a5edcd813982b5f1",
+  "headSha": "00c1c82662fc9c117aee019f284bde4e0db2a14e",
+  "source": "injected",
+  "language": "ts",
+  "validated": false,
+  "bugs": [
+    {
+      "file": "packages/server/src/unstable-core-do-not-import/http/contentType.ts",
+      "lines": [
+        86,
+        86
+      ],
+      "description": "INJECTED (return-value-dropped): Return value dropped in an exported function; callers still use the result. `return <value>` replaced by an empty return in `emptyObject` (callers still consume the result). Mutated packages/server/src/unstable-core-do-not-import/utils.ts:45: `return Object.create(null);` -> `return;`. The bug manifests in packages/server/src/unstable-core-do-not-import/http/contentType.ts:86: `return emptyObject();`.",
+      "severity": "high",
+      "category": "api-contract",
+      "crossFile": true,
+      "relatedFiles": [
+        "packages/server/src/unstable-core-do-not-import/utils.ts"
+      ]
+    }
+  ]
+}

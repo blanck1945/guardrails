@@ -1,0 +1,25 @@
+{
+  "id": "trpc-inj-7241",
+  "repo": "https://github.com/trpc/trpc",
+  "baseSha": "9eeac9fc269c6f0c6c99e3897526bd23b9b69cbf",
+  "headSha": "eb818117e6e67c5ad076b404499bbd1f0978910b",
+  "source": "injected",
+  "language": "ts",
+  "validated": false,
+  "bugs": [
+    {
+      "file": "packages/server/src/unstable-core-do-not-import/http/resolveResponse.ts",
+      "lines": [
+        304,
+        304
+      ],
+      "description": "INJECTED (declaration-renamed): Exported function renamed without updating its callers. `getAcceptHeader` renamed to `getAcceptHeaderV2` in its declaration only; callers still use `getAcceptHeader`. Mutated packages/server/src/unstable-core-do-not-import/http/contentType.ts:8: `export function getAcceptHeader(headers: Headers): TRPCAcceptHeader | null {` -> `export function getAcceptHeaderV2(headers: Headers): TRPCAcceptHeader | null {`. The bug manifests in packages/server/src/unstable-core-do-not-import/http/resolveResponse.ts:304: `const isStreamCall = getAcceptHeader(req.headers) === 'application/jsonl';`.",
+      "severity": "high",
+      "category": "api-contract",
+      "crossFile": true,
+      "relatedFiles": [
+        "packages/server/src/unstable-core-do-not-import/http/contentType.ts"
+      ]
+    }
+  ]
+}
