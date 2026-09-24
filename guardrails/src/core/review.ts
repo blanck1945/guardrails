@@ -5,7 +5,9 @@ import { parseUnifiedDiff } from "./diff";
 import { defaultModelSpec, jsonOnlyInstruction, modelSpecOf, resolveModel } from "./models";
 import { estimateCostUsd } from "./pricing";
 import { samplingFor } from "./sampling";
-import { runReviewAgent } from "./agent/loop";
+import { runReviewAgent, type AgentRunResult } from "./agent/loop";
+import { mergeRuns } from "./agent/passes";
+import { describeMode, MODE_PRESETS, type ModePreset, type ModeSelection } from "./modes";
 import type { RuleChecksMode } from "./agent/prompts";
 import type { RuleCheck } from "./findings/schema";
 import { emptyUsage, sumUsage, type UsageTotals } from "./agent/budget";
@@ -43,6 +45,8 @@ export interface ReviewOptions {
   temperature?: number;
   /** Per-rule verdict pass: `off` (basic), `ask` (default), `require` (deep: one bounce for an incomplete report). */
   ruleChecks?: RuleChecksMode;
+  /** Review mode (basic | standard | deep): steps, confidence threshold, cap, passes, temperature. Default: the `standard` preset. */
+  reviewMode?: { preset: ModePreset; selection?: ModeSelection };
 }
 
 export interface ReviewOutput {
@@ -64,6 +68,11 @@ export interface ReviewOutput {
   modelIncomplete?: "budget" | "timeout" | "error";
   /** Verdicts of the exhaustive per-rule pass (agent mode), when the model returned them. */
   ruleChecks?: RuleCheck[];
+  /** Mode the review ran in and why (when the caller selected one). */
+  modeSelection?: ModeSelection;
+  /** Agent passes requested and how many of them failed (deep runs 2). */
+  passes: number;
+  passesFailed: number;
 }
 
 function classifyModelFailure(err: unknown, signal?: AbortSignal): "budget" | "timeout" | "error" {
@@ -87,14 +96,23 @@ export async function reviewDiff(
     workspace,
     abortSignal,
     costTracker,
-    temperature,
-    ruleChecks,
+    temperature: temperatureOption,
+    ruleChecks: ruleChecksOption,
+    reviewMode,
   }: ReviewOptions,
 ): Promise<ReviewOutput> {
   const before = costTracker?.snapshot();
   const costOf = (usage: UsageTotals): number | null =>
     costTracker && before ? costSince(costTracker, before) : estimateCostUsd(modelSpecOf(model), usage);
-  const min = MIN_CONFIDENCE[config.strictness as 1 | 2 | 3];
+  const preset = reviewMode?.preset ?? MODE_PRESETS.standard;
+  const selection = reviewMode?.selection;
+  // `basic` and `deep` set their own strictness; `standard` keeps whatever the repo configured.
+  const strictness = preset.strictness ?? config.strictness;
+  const runConfig = { ...config, strictness };
+  const min = preset.minConfidence ?? MIN_CONFIDENCE[strictness as 1 | 2 | 3];
+  const cap = preset.findingCap ?? capFor(strictness);
+  const temperature = temperatureOption ?? preset.temperature;
+  const ruleChecks = ruleChecksOption ?? preset.ruleChecks;
   // A finding may only cite a rule that was given to the model (active rules in `config.rules`).
   // A finding may only cite a rule that was given to the model (active rules in `config.rules`).
   // A finding that cites such a rule is exempt from the comment-type filter (a team rule about
@@ -142,7 +160,7 @@ export async function reviewDiff(
     }
     // Less noise per change: collapse findings piled on one line, then cap the total by strictness.
     const collapsed = collapseByLocation(kept, config.rules);
-    const capped = capFindings(collapsed.kept, config.rules, capFor(config.strictness));
+    const capped = capFindings(collapsed.kept, config.rules, cap);
     dropped.push(...collapsed.dropped, ...capped.dropped);
     const omitted = capped.dropped.length;
     return { findings: capped.kept, dropped, omitted };
@@ -151,8 +169,10 @@ export async function reviewDiff(
     omitted ? `${summary}${summary ? " " : ""}(${omitted} lower-priority finding(s) omitted: over the review cap.)` : summary;
 
   const checksMeta = { ran: checkOutcome.ran, skipped: checkOutcome.skipped, findings: checkFindings.length };
-  const withChecks = (summary: string, failure?: "budget" | "timeout" | "error") => {
+  const withChecks = (summary: string, failure?: "budget" | "timeout" | "error", passesFailed = 0) => {
     const extra = [
+      selection ? describeMode(selection) : "",
+      passesFailed ? `${passesFailed} of ${preset.passes} review passes did not complete (time or budget); results come from the other pass and the mechanical checks.` : "",
       checkFindings.length ? `${checkFindings.length} finding(s) come from mechanical rule checks.` : "",
       failure ? `The model-based review did not complete (${FAILURE_TEXT[failure]}); only the mechanical check results are shown.` : "",
     ].filter(Boolean);
@@ -162,14 +182,37 @@ export async function reviewDiff(
   const modelPart = async () => {
     if (mode === "agent") {
       if (!workspace) throw new Error("reviewDiff: mode 'agent' requires a workspace");
-      const run = await runReviewAgent({ model, config, workspace, input, abortSignal, costTracker, mechanicalRuleIds: mechanical, temperature, ruleChecks });
+      const runOne = (focus?: "general" | "rules-and-logic") =>
+        runReviewAgent({
+          model,
+          config: runConfig,
+          workspace,
+          input,
+          abortSignal,
+          costTracker,
+          mechanicalRuleIds: mechanical,
+          temperature,
+          ruleChecks,
+          focus,
+          budget: { maxSteps: preset.maxSteps, maxInputTokens: preset.maxInputTokens },
+        });
+      let run: AgentRunResult;
+      let passesFailed = 0;
+      if (preset.passes === 2) {
+        // Two independent passes at once (same deadline). A pass that fails or times out is dropped if the other completed.
+        const settled = await Promise.allSettled([runOne("general"), runOne("rules-and-logic")]);
+        const done = settled.flatMap((s) => (s.status === "fulfilled" ? [s.value] : []));
+        if (!done.length) throw (settled[0] as PromiseRejectedResult).reason;
+        passesFailed = settled.length - done.length;
+        run = mergeRuns(done);
+      } else run = await runOne();
       const v = await verify(run.findings);
-      return { ...v, summary: run.notes ?? "", usage: run.usage, incomplete: run.incomplete, notes: run.notes, ruleChecks: run.ruleChecks };
+      return { ...v, summary: run.notes ?? "", usage: run.usage, incomplete: run.incomplete, notes: run.notes, ruleChecks: run.ruleChecks, passesFailed, passes: preset.passes };
     }
     const result = await generateText({
       model: resolveModel(model, { tracker: costTracker }),
       output: Output.object({ schema: reviewResultSchema }),
-      instructions: `${buildSystemPrompt(config, mechanical)}
+      instructions: `${buildSystemPrompt(runConfig, mechanical)}
 
 ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
       prompt: buildUserPrompt(input),
@@ -178,7 +221,7 @@ ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
     });
     const usage = result.steps.length ? sumUsage(result.steps.map((s) => s.usage)) : emptyUsage();
     const v = await verify(result.output.findings);
-    return { ...v, summary: result.output.summary, usage, incomplete: undefined, notes: undefined, ruleChecks: undefined };
+    return { ...v, summary: result.output.summary, usage, incomplete: undefined, notes: undefined, ruleChecks: undefined, passesFailed: 0, passes: 1 };
   };
 
   let part: Awaited<ReturnType<typeof modelPart>>;
@@ -189,10 +232,10 @@ ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
     // Without any check finding there is nothing to publish: the caller reports the failure as before.
     if (!checkFindings.length) throw err;
     failure = classifyModelFailure(err, abortSignal);
-    part = { findings: [], dropped: [], omitted: 0, summary: "", usage: emptyUsage(), incomplete: true, notes: undefined, ruleChecks: undefined };
+    part = { findings: [], dropped: [], omitted: 0, summary: "", usage: emptyUsage(), incomplete: true, notes: undefined, ruleChecks: undefined, passesFailed: 0, passes: 1 };
   }
   return {
-    summary: withChecks(withOmitted(part.summary, part.omitted), failure),
+    summary: withChecks(withOmitted(part.summary, part.omitted), failure, part.passesFailed),
     findings: [...checkFindings, ...part.findings],
     dropped: part.dropped,
     mode,
@@ -202,6 +245,9 @@ ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
     ...(part.notes !== undefined ? { notes: part.notes } : {}),
     ...(part.ruleChecks ? { ruleChecks: part.ruleChecks } : {}),
     checks: checksMeta,
+    ...(selection ? { modeSelection: selection } : {}),
+    passes: part.passes,
+    passesFailed: part.passesFailed,
     ...(failure ? { modelIncomplete: failure } : {}),
   };
 }

@@ -123,8 +123,8 @@ function setup(overrides: Partial<ReviewPrDeps> = {}, ws = fakeWorkspace()) {
 }
 
 describe("reviewSettings", () => {
-  it("defaults to agent, 0.25 USD and 240 s", () => {
-    expect(reviewSettings({})).toEqual({ mode: "agent", budgetUsd: 0.25, timeoutSec: 240 });
+  it("defaults to agent, the mode's own budget (no override) and 240 s", () => {
+    expect(reviewSettings({})).toEqual({ mode: "agent", budgetUsd: undefined, timeoutSec: 240 });
   });
   it("reads the env and ignores invalid values", () => {
     expect(reviewSettings({ GUARDRAILS_MODE: "single", GUARDRAILS_REVIEW_BUDGET_USD: "1.5", GUARDRAILS_REVIEW_TIMEOUT_SEC: "100" })).toEqual({
@@ -134,7 +134,7 @@ describe("reviewSettings", () => {
     });
     expect(reviewSettings({ GUARDRAILS_MODE: "bogus", GUARDRAILS_REVIEW_BUDGET_USD: "-1", GUARDRAILS_REVIEW_TIMEOUT_SEC: "abc" })).toEqual({
       mode: "agent",
-      budgetUsd: 0.25,
+      budgetUsd: undefined,
       timeoutSec: 240,
     });
   });

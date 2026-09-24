@@ -15,5 +15,12 @@ export const REQUIRED_PERMISSIONS = {
 /** Webhook events the App subscribes to and the handler accepts. */
 export const SUBSCRIBED_EVENTS = ["pull_request"] as const;
 
+/**
+ * `pull_request` actions `labeled` / `unlabeled` re-run the review ONLY when the label starts with `MODE_LABEL_PREFIX`
+ * (the review mode changed). They arrive on the already subscribed `pull_request` event: no new event or permission.
+ */
+export const LABEL_ACTIONS = ["labeled", "unlabeled"] as const;
+export const MODE_LABEL_PREFIX = "guardrails:";
+
 /** `pull_request` actions that trigger a review. */
 export const REVIEW_ACTIONS = ["opened", "synchronize", "reopened", "ready_for_review"] as const;

@@ -19,7 +19,7 @@ All commands run from this directory as `pnpm guardrails <command>`.
 
 `review` options:
 
-- `--mode agent|single` (default `agent`: the model can read files and grep the repo; `single` is one call over the diff).
+- `--mode basic|standard|deep` review mode (see Review modes; default: from config, else `standard`). `--engine agent|single` (default `agent`: the model can read files and grep the repo; `single` is one call over the diff).
 - `--model <id>` overrides `GUARDRAILS_MODEL`.
 - `--budget-usd N` stops the run when the estimated spend reaches N. `--dry-run` prints the estimate and calls nothing. `--yes` accepts an estimate above US$1.
 - `init` also takes `--timeout-sec N` (default 180, 0 = none): aborts the model calls with a clear error. It prints progress per stage (collect, synthesize, filter, write) on stderr, suggests at most 15 rules, and checks every rule scope against the tracked files (repairs an unambiguous truncated name, drops dead globs, lists them under "Scope warnings").
@@ -30,10 +30,57 @@ Exit codes: `0` no findings at or above the threshold, `1` findings at or above 
 Rules and config are read from the **base** commit, never from the changes under review, so a change cannot weaken its own review.
 Only `active` rules whose `scope` matches a changed file are sent to the model.
 
+## Review modes
+
+A review runs in one of three modes. The mechanical checks (`check:` rules) run in every mode.
+
+| | `basic` | `standard` (default) | `deep` |
+|---|---|---|---|
+| For | small PRs, fast and permissive | normal PRs | risky or large PRs, strict and exhaustive |
+| Agent steps (per pass) | 4 | 12 | 24 |
+| Spend cap | US$0.05 | US$0.25 | US$0.75 |
+| Minimum confidence | 0.8 | 0.6 (`strictness` 2; follows `config.strictness`) | 0.4 |
+| Max model findings | 3 | 5 (follows `config.strictness`) | 12 |
+| Per-rule verdicts (`ruleChecks`) | off | asked | required (an incomplete report is bounced once) |
+| Passes | 1 | 1 | 2 in parallel: union, dedupe, +0.1 confidence for what both found |
+| Temperature | 0 | 0 | 0 |
+| Deadline | 120 s | 240 s | 240 s |
+
+Check findings are never capped or filtered. In `deep` the two passes run at the same time under the same deadline (`GUARDRAILS_REVIEW_TIMEOUT_SEC`, default 240, below the webhook's 300 s): if time runs out, what was obtained plus the check findings is published. The review summary states the mode used and why.
+
+### Choosing the mode (highest priority first)
+
+1. CLI: `guardrails review --mode basic|standard|deep`.
+2. PR label `guardrails:basic|standard|deep` (case-insensitive; with several, the strictest wins).
+3. A line in the PR description: `guardrails-mode: deep`.
+4. `autoMode` in `.guardrails/config.json` (first matching entry), then `mode` in the same file.
+5. `standard`.
+
+Config is read from the BASE commit, like the rules. In the GitHub App, adding or removing a `guardrails:*` label re-runs the review with the new mode (any other label is ignored; no new event or permission is needed, the App already receives `pull_request`).
+
+```json
+{
+  "mode": "standard",
+  "prOverride": "labels",
+  "autoMode": [
+    { "touchesPaths": ["src/auth/**", "src/billing/**"], "mode": "deep" },
+    { "onlyPaths": ["docs/**", "*.md"], "mode": "basic" },
+    { "linesChangedGreaterThan": 400, "mode": "deep" },
+    { "filesLessThan": 3, "linesChangedGreaterThan": 0, "mode": "basic" }
+  ]
+}
+```
+
+Conditions of one entry are combined with AND: `filesGreaterThan`, `filesLessThan`, `linesChangedGreaterThan` (added plus removed lines), `onlyPaths` (every changed file matches one glob), `touchesPaths` (some changed file matches). An entry needs at least one.
+
+**`prOverride` and its risk.** With the default `"labels"`, whoever can label the PR or edit its description can pick the mode, so a PR author can relax the review of their own PR (`basic` runs fewer steps and hides low-confidence findings). Set `"prOverride": "none"` to make labels and the description powerless; the mode then comes only from the CLI flag, `autoMode` and `mode` in the base config. Mechanical checks run in every mode either way.
+
+`--engine agent|single` selects the engine (`--mode agent|single` from before 0.7 still works).
+
 ## Configuration
 
 `.guardrails/rules.md` holds the rules (one `## <id>` block each, with `scope`, `severity`, `type`, `source`, `status`). `type` (`logic|security|syntax|style`, default `style`) is the type of the finding when the rule is violated: the rule decides it, not the model.
-`.guardrails/config.json` holds `strictness`, `commentTypes`, `ignorePatterns`, `triggers` and so on.
+`.guardrails/config.json` holds `mode`, `autoMode`, `prOverride`, `strictness`, `commentTypes`, `ignorePatterns`, `triggers` and so on.
 See `PLAN-DETAILED.md` section 6.4 (in the repository root) for the format.
 
 ### Mechanical checks (`check:`)
@@ -76,6 +123,7 @@ Loaded from the process environment or from `guardrails/.env.local` (never commi
 | `GUARDRAILS_SEED` | Integer seed. By default a fixed seed is sent only to providers that document one (OpenAI ids through the Gateway); Z.ai does not, so none is sent unless you set this. |
 | `GUARDRAILS_LLM_CACHE=1` | Dev/eval only: replay identical model calls from disk. |
 | `GUARDRAILS_SKIP=1` | Skips the pre-push hook for one push. |
+| `GUARDRAILS_REVIEW_BUDGET_USD`, `GUARDRAILS_REVIEW_TIMEOUT_SEC` | Webhook only: replace the mode's spend cap; deadline of one review (default 240 s). |
 | `GUARDRAILS_BUDGET_USD` | Per-review budget used by the hook (default `0.50`). |
 | `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET` | GitHub App only; see `docs/github-app-setup.md`. |
 

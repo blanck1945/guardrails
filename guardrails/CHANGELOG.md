@@ -3,6 +3,21 @@
 Each version has three parts: what we did, what we observed when we measured it, and what that made us do next.
 The "Next" of a version is the "What we did" of the following one. Newest first. See `CLAUDE.md` for the convention.
 
+## v0.7.0 — 2026-09-25
+### What we did
+- B43: three review modes per PR, presets in `src/core/modes.ts`: `basic` (4 steps, US$0.05, confidence 0.8, cap 3, no per-rule verdicts), `standard` (12 steps, US$0.25, confidence 0.6, cap 5, verdicts asked; it keeps following `config.strictness`), `deep` (24 steps, US$0.75, confidence 0.4, cap 12, verdicts required, 2 passes). Mechanical checks run in every mode and are never capped.
+- `deep` runs two independent agent passes concurrently under the same deadline (the second one with a "rules first, then logic bugs" focus so the passes are not copies at temperature 0); findings are united, deduplicated (same file, lines within 3, same rule or similar title) and a finding seen by both gets +0.1 confidence. If one pass fails or the time runs out, the other pass plus the checks are published and the summary says so.
+- Mode selection, highest priority first: `guardrails review --mode`; PR label `guardrails:<mode>` (case-insensitive, strictest wins); `guardrails-mode: <mode>` line in the PR description; `autoMode` in the base `config.json` (`filesGreaterThan`, `filesLessThan`, `linesChangedGreaterThan`, `onlyPaths`, `touchesPaths`; conditions of an entry are ANDed, first entry wins); config `mode`; `standard`. `prOverride: "none"` makes labels and description powerless (documented risk: with the default `"labels"` a PR author can relax their own review).
+- Webhook: `labeled`/`unlabeled` re-review only for labels starting with `guardrails:`; no new event or permission. The review summary states the mode and why.
+- Decisions taken where the request was ambiguous: `standard` keeps following `config.strictness` for confidence and cap (so existing repos see no change), while `basic` and `deep` fix their own; `--mode agent|single` (old meaning) is still accepted and `--engine agent|single` was added, because `--mode` now names the review mode; the CLI now applies the mode's spend cap when `--budget-usd` is not given; `GUARDRAILS_REVIEW_BUDGET_USD`, when set, replaces the mode's cap; `GUARDRAILS_REVIEW_TIMEOUT_SEC` (default 240) is an upper bound, `basic` asks for 120 s; a pass that times out loses its partial work (the agent only reports at the end).
+
+### What we observed
+- (filled in by the B45 re-measurement below)
+
+### Next (v0.7.1)
+- Depends on the measurement above.
+- Efficiency ideas (not implemented yet): a model per mode (for example glm-5.3-flash for `basic`); incremental re-review on push (only what changed since the last reviewed commit); less context per call and prompt-prefix ordering so the provider cache hits; skip trivial diffs (lockfiles, formatting, docs only); a daily spend cap; cost visibility per review (cost and mode in the PR summary, aggregated over time).
+
 ## v0.6.1 — 2026-09-25
 ### What we did
 - B42a: mechanical checks per rule, no model. `rules.md` accepts `check:` and `exclude:`; `src/core/checks/` runs `max-lines: N`, `colocated-test`, `forbid-import: <glob|substring>` and `forbid-pattern[(comments|code|strings)]: <regex>` over the parsed diff and the head tree (`Workspace`). Findings carry `origin: "check"`, confidence 1, the rule's severity and type, and an exact `file:line`.
@@ -17,8 +32,8 @@ The "Next" of a version is the "What we did" of the following one. Newest first.
 - Unit level: the check types are deterministic (same diff and tree, same findings; tested by running with the rule order reversed).
 
 ### Next (v0.7.0)
-- Review modes per PR (`basic`, `standard`, `deep`) with presets, selection by CLI, label, PR description and `autoMode` in config, and the `prOverride` guard (B43).
-- Re-measure the 6 seeded PRs (B45).
+- Review modes per PR (`basic`, `standard`, `deep`) with presets, selection by CLI, label, PR description and `autoMode` in config, and the `prOverride` guard (B43), done in v0.7.0.
+- Re-measure the seeded PRs with both changes (B45), recorded under v0.7.0.
 
 ## v0.6.0 — 2026-09-24
 ### What we did

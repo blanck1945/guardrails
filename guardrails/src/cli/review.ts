@@ -14,6 +14,7 @@ import { defaultConfig, loadRules, type Rule } from "../core";
 import { BudgetExceededError, CostTracker } from "../core/cost";
 import { defaultModelSpec, MissingApiKeyError } from "../core/models";
 import { DEFAULT_IGNORES, isIgnored } from "../core/paths";
+import { isModeName, MODE_NAMES, MODE_PRESETS, selectMode, statsOfDiff, type ModeName } from "../core/modes";
 import { reviewDiff, type ReviewMode, type ReviewOutput } from "../core/review";
 import { selectRulesForFiles } from "../core/rules";
 import { estimateRun, planSpend, PROFILES } from "../core/spend";
@@ -21,7 +22,7 @@ import type { Finding, ReviewInput } from "../core/types";
 import { LocalWorkspace } from "../core/workspace";
 
 export const REVIEW_USAGE =
-  "Usage: guardrails review [--path <repo>] [--base <ref>] [--head <ref>] [--mode agent|single] [--model <id>]\n" +
+  "Usage: guardrails review [--path <repo>] [--base <ref>] [--head <ref>] [--mode basic|standard|deep] [--engine agent|single] [--model <id>]\n" +
   "                         [--budget-usd <N>] [--dry-run] [--yes] [--json] [--fail-on high|medium|low|none]";
 
 const RULES_PATH = ".guardrails/rules.md";
@@ -36,7 +37,10 @@ export interface ReviewCliOptions {
   path: string;
   base?: string | undefined;
   head: string;
+  /** Engine: `agent` (tools) or `single` (one call). */
   mode: ReviewMode;
+  /** Review mode chosen with `--mode basic|standard|deep`; undefined = decided by config (`autoMode`, `mode`) or `standard`. */
+  reviewMode?: ModeName | undefined;
   /** Model spec string or a `LanguageModel` instance (tests). Default: `GUARDRAILS_MODEL`. */
   model?: LanguageModel | string | undefined;
   budgetUsd?: number | undefined;
@@ -63,7 +67,8 @@ export function parseReviewArgs(argv: string[]): ReviewCliOptions {
       path: { type: "string", default: "." },
       base: { type: "string" },
       head: { type: "string", default: "HEAD" },
-      mode: { type: "string", default: "agent" },
+      mode: { type: "string" },
+      engine: { type: "string" },
       model: { type: "string" },
       "budget-usd": { type: "string" },
       "dry-run": { type: "boolean", default: false },
@@ -72,7 +77,11 @@ export function parseReviewArgs(argv: string[]): ReviewCliOptions {
       "fail-on": { type: "string", default: "high" },
     },
   });
-  if (values.mode !== "agent" && values.mode !== "single") throw new UsageError("--mode must be agent or single");
+  // `--mode agent|single` is the pre-0.7 spelling of `--engine`; it is still accepted.
+  const legacyEngine = values.mode === "agent" || values.mode === "single" ? values.mode : undefined;
+  if (values.mode !== undefined && !legacyEngine && !isModeName(values.mode)) throw new UsageError(`--mode must be ${MODE_NAMES.join(", ")}`);
+  const engine = values.engine ?? legacyEngine ?? "agent";
+  if (engine !== "agent" && engine !== "single") throw new UsageError("--engine must be agent or single");
   const failOn = values["fail-on"] as string;
   if (!["high", "medium", "low", "none"].includes(failOn)) throw new UsageError("--fail-on must be high, medium, low or none");
   const budgetUsd = values["budget-usd"] === undefined ? undefined : Number(values["budget-usd"]);
@@ -81,7 +90,8 @@ export function parseReviewArgs(argv: string[]): ReviewCliOptions {
     path: values.path as string,
     base: values.base,
     head: values.head as string,
-    mode: values.mode,
+    mode: engine,
+    reviewMode: isModeName(values.mode) ? values.mode : undefined,
     model: values.model,
     budgetUsd,
     dryRun: values["dry-run"] as boolean,
@@ -264,21 +274,26 @@ async function runReviewInner(opts: ReviewCliOptions, io: CliIO): Promise<number
   const modelSpec = opts.model ?? defaultModelSpec();
   const specLabel = typeof modelSpec === "string" ? modelSpec : `${modelSpec.provider}:${modelSpec.modelId}`;
 
+  // Review mode: --mode, then config autoMode / mode, then standard (PR labels do not exist locally).
+  const selection = selectMode({ cli: opts.reviewMode, config, stats: statsOfDiff(diff) });
+  const preset = MODE_PRESETS[selection.mode];
+  const budgetUsd = opts.budgetUsd ?? preset.budgetUsd;
+
   const plan = planSpend({
-    estimate: estimateRun(specLabel, 1, opts.mode === "agent" ? "agent" : "single"),
-    budgetUsd: opts.budgetUsd,
+    estimate: estimateRun(specLabel, opts.mode === "agent" ? preset.passes : 1, opts.mode === "agent" ? "agent" : "single"),
+    budgetUsd,
     yes: opts.yes,
     dryRun: opts.dryRun,
     interactive: opts.interactive,
   });
-  const header = `Range: ${baseSha.slice(0, 8)} (${range.baseLabel}) .. ${headSha.slice(0, 8)}; ${files.length} file(s); ${rules.length} active rule(s) in scope`;
+  const header = `Range: ${baseSha.slice(0, 8)} (${range.baseLabel}) .. ${headSha.slice(0, 8)}; ${files.length} file(s); ${rules.length} active rule(s) in scope; mode ${selection.mode} (${selection.detail})`;
   if (plan.action !== "run") {
     (plan.action === "refuse" ? io.err : io.out)(`${header}\n${plan.message}`);
     return plan.action === "refuse" ? 2 : 0;
   }
   io.err(`${header}\n${plan.message}`);
 
-  const tracker = new CostTracker({ maxUsd: opts.budgetUsd, onWarn: (m) => io.err(`warning: ${m}`) });
+  const tracker = new CostTracker({ maxUsd: budgetUsd, onWarn: (m) => io.err(`warning: ${m}`) });
   const title = (await git(root, ["log", "-1", "--format=%s", headSha])).stdout.trim();
   const input: ReviewInput = { diff, context: {}, docs: {}, title };
   if (opts.mode === "single") {
@@ -291,6 +306,7 @@ async function runReviewInner(opts: ReviewCliOptions, io: CliIO): Promise<number
     config: reviewConfig,
     model: modelSpec,
     mode: opts.mode,
+    reviewMode: { preset, selection },
     // Single mode does not use tools, but the workspace still grounds absence claims after the call.
     workspace,
     costTracker: tracker,
@@ -304,7 +320,7 @@ async function runReviewInner(opts: ReviewCliOptions, io: CliIO): Promise<number
   const threshold = opts.failOn === "none" ? Infinity : rank(opts.failOn);
   const blocking = out.findings.filter((f) => rank(f.severity) >= threshold);
   if (opts.json) {
-    io.out(JSON.stringify({ base: baseSha, head: headSha, model: specLabel, rules: rules.map((r) => r.id), ...out, blocking: blocking.length }, null, 2));
+    io.out(JSON.stringify({ base: baseSha, head: headSha, model: specLabel, reviewMode: selection.mode, rules: rules.map((r) => r.id), ...out, blocking: blocking.length }, null, 2));
   } else {
     io.out(formatHuman(out, rules, { base: baseSha, head: headSha, model: specLabel, files: files.length }, opts.failOn));
   }

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { REVIEW_ACTIONS, SUBSCRIBED_EVENTS } from "./app-permissions";
+import { LABEL_ACTIONS, MODE_LABEL_PREFIX, REVIEW_ACTIONS, SUBSCRIBED_EVENTS } from "./app-permissions";
 import { log } from "./log";
 
 export interface Triggers {
@@ -19,6 +19,8 @@ export interface PullRequestEvent {
   draft: boolean;
   isFork: boolean;
   labels: string[];
+  /** Name of the label that was added or removed (`labeled` / `unlabeled` actions). */
+  label?: string | undefined;
   senderLogin: string;
   senderType: string;
   /** Id of the GitHub App that performed the action, when it was an app (used to ignore our own events). */
@@ -92,6 +94,7 @@ export function parsePullRequestEvent(p: unknown): PullRequestEvent | null {
     draft: pr.draft === true,
     isFork: !headRepo || headRepo.full_name !== repo.full_name,
     labels: Array.isArray(pr.labels) ? pr.labels.map((l: any) => l?.name).filter((n: unknown): n is string => typeof n === "string") : [],
+    label: typeof p.label?.name === "string" ? p.label.name : undefined,
     senderLogin: typeof p.sender?.login === "string" ? p.sender.login : "",
     senderType: typeof p.sender?.type === "string" ? p.sender.type : "",
     performedByAppId: typeof p.performed_via_github_app?.id === "number" ? p.performed_via_github_app.id : undefined,
@@ -169,7 +172,13 @@ export async function handleWebhook(req: Request, deps: WebhookDeps): Promise<Re
     return ignored("unusable payload");
   }
   const at = { ...base, repo: `${ev.owner}/${ev.repo}`, pr: ev.number, action: ev.action };
-  if (!(REVIEW_ACTIONS as readonly string[]).includes(ev.action)) {
+  if ((LABEL_ACTIONS as readonly string[]).includes(ev.action)) {
+    // Only a change of a `guardrails:*` label (the review mode) re-runs the review; any other label is noise.
+    if (!ev.label?.toLowerCase().startsWith(MODE_LABEL_PREFIX)) {
+      log("webhook.ignored", { ...at, reason: "label" });
+      return ignored("label");
+    }
+  } else if (!(REVIEW_ACTIONS as readonly string[]).includes(ev.action)) {
     log("webhook.ignored", { ...at, reason: "action" });
     return ignored("action");
   }

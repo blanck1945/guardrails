@@ -25,7 +25,36 @@ export const ruleSchema = z.object({
   status: z.enum(["active", "suggested", "disabled"]).default("active"),
 });
 
+const modeNameSchema = z.enum(["basic", "standard", "deep"]);
+
+/**
+ * One automatic-mode entry: every condition given must hold (AND); at least one is required. Entries are tried in order and
+ * the first that matches wins. `onlyPaths`: every changed file matches one of the globs; `touchesPaths`: some changed file does.
+ */
+export const autoModeRuleSchema = z
+  .object({
+    filesGreaterThan: z.number().int().min(0).optional(),
+    filesLessThan: z.number().int().min(0).optional(),
+    linesChangedGreaterThan: z.number().int().min(0).optional(),
+    onlyPaths: z.array(z.string()).min(1).optional(),
+    touchesPaths: z.array(z.string()).min(1).optional(),
+    mode: modeNameSchema,
+  })
+  .refine((r) => r.filesGreaterThan !== undefined || r.filesLessThan !== undefined || r.linesChangedGreaterThan !== undefined || r.onlyPaths !== undefined || r.touchesPaths !== undefined, {
+    message: "an autoMode entry needs at least one condition",
+  });
+
 export const configSchema = z.object({
+  /** Default review mode when nothing more specific selects one (basic | standard | deep). */
+  mode: modeNameSchema.optional(),
+  /** Ordered automatic mode rules; the first matching entry wins. */
+  autoMode: z.array(autoModeRuleSchema).default([]),
+  /**
+   * Who may change the mode from the PR itself. `labels` (default): PR labels `guardrails:<mode>` and a `guardrails-mode:` line in the
+   * description. `none`: neither can; only the CLI flag, `autoMode` and `mode` apply. Risk of `labels`: the PR author (or anyone who can label)
+   * can pick `basic` for their own PR, since the config is read from the base but the label/description come from the PR.
+   */
+  prOverride: z.enum(["labels", "none"]).default("labels"),
   strictness: z.number().int().min(1).max(3).default(2),
   commentTypes: z
     .array(z.enum(["logic", "security", "syntax", "style"]))

@@ -44,10 +44,23 @@ Optional review settings (all have defaults, none is required):
 | Variable | Default | Meaning |
 |---|---|---|
 | `GUARDRAILS_MODE` | `agent` | `agent` downloads the repository as a tarball and lets the agent search and read it; `single` makes one model call over the diff and a few files (the previous behaviour). |
-| `GUARDRAILS_REVIEW_BUDGET_USD` | `0.25` | Spend cap per review. When it is reached the review stops and the PR gets a short notice; there is no fallback. |
-| `GUARDRAILS_REVIEW_TIMEOUT_SEC` | `240` | Deadline for the whole review (tarball download plus model loop). The function limit is 300 s (`vercel.json`), so keep this below it. |
+| `GUARDRAILS_REVIEW_BUDGET_USD` | (unset: the review mode's own cap, US$0.05 / 0.25 / 0.75) | Spend cap per review; when set it replaces the mode's cap. When it is reached the model part stops; check findings are still published, and with none the PR gets a short notice. |
+| `GUARDRAILS_REVIEW_TIMEOUT_SEC` | `240` | Deadline for the whole review (tarball download plus model loop); `basic` asks for at most 120 s. The function limit is 300 s (`vercel.json`), so keep this below it. In `deep` the two passes run concurrently under this same deadline. |
 
 Check what is set (values are not shown): `vercel env ls`.
+
+## Review modes on the webhook
+
+Each PR is reviewed in `basic`, `standard` (default) or `deep` mode; the summary of the review says which and why. Presets (steps, spend cap, confidence, finding cap, passes, deadline) and the selection rules (PR label `guardrails:<mode>`, description line `guardrails-mode: <mode>`, `autoMode` and `mode` in `.guardrails/config.json` of the base commit, `prOverride`) are in the README, section "Review modes".
+
+- The GitHub App keeps the same subscription (`pull_request`) and permissions. `labeled` and `unlabeled` actions are processed only when the label starts with `guardrails:`, so changing the label re-reviews the PR with the new mode; every other label is ignored.
+- Example base config that reviews auth changes deeply and docs-only PRs quickly, and stops authors from changing it:
+
+```json
+{ "prOverride": "none", "autoMode": [ { "touchesPaths": ["src/auth/**"], "mode": "deep" }, { "onlyPaths": ["docs/**", "*.md"], "mode": "basic" } ] }
+```
+
+- With `prOverride: "labels"` (default) the PR author can lower the mode of their own PR by editing the description or adding a label. Use `"none"` on repositories where that matters.
 
 ## 3. First deploy
 

@@ -1,5 +1,5 @@
 import type { LanguageModel } from "ai";
-import { reviewDiff, type Finding, type ReviewInput, type ReviewMode, type Rule } from "@/core";
+import { MODE_PRESETS, reviewDiff, selectMode, type Finding, type ReviewInput, type ReviewMode, type Rule } from "@/core";
 import { commentableLines } from "./diff";
 import { DEFAULT_IGNORES, isIgnored } from "@/core/paths";
 import {
@@ -39,7 +39,9 @@ export const DEFAULT_REVIEW_TIMEOUT_SEC = 240;
 
 export interface ReviewSettings {
   mode: ReviewMode;
-  budgetUsd: number;
+  /** `GUARDRAILS_REVIEW_BUDGET_USD`: when set it replaces the review mode's own budget. */
+  budgetUsd: number | undefined;
+  /** Deadline for the whole review (default 240; a review mode may ask for less, never more). */
   timeoutSec: number;
 }
 
@@ -52,7 +54,7 @@ function positiveNumber(raw: string | undefined, fallback: number): number {
 export function reviewSettings(env: Record<string, string | undefined> = process.env): ReviewSettings {
   return {
     mode: env.GUARDRAILS_MODE?.trim().toLowerCase() === "single" ? "single" : "agent",
-    budgetUsd: positiveNumber(env.GUARDRAILS_REVIEW_BUDGET_USD, DEFAULT_REVIEW_BUDGET_USD),
+    budgetUsd: positiveNumber(env.GUARDRAILS_REVIEW_BUDGET_USD, NaN) || undefined,
     timeoutSec: positiveNumber(env.GUARDRAILS_REVIEW_TIMEOUT_SEC, DEFAULT_REVIEW_TIMEOUT_SEC),
   };
 }
@@ -109,8 +111,6 @@ export async function reviewPullRequest(ev: PullRequestEvent, deps: ReviewPrDeps
   const { owner, repo, number, headSha } = ev;
   const at = { repo: `${owner}/${repo}`, pr: number };
   const started = Date.now();
-  // One deadline for the whole review: tarball download plus the model loop.
-  const signal = AbortSignal.timeout(settings.timeoutSec * 1000);
 
   const [pr, files] = await Promise.all([
     octo.rest.pulls.get({ owner, repo, pull_number: number }),
@@ -133,6 +133,19 @@ export async function reviewPullRequest(ev: PullRequestEvent, deps: ReviewPrDeps
   const rules = rulesForPr(loaded, reviewable.map((f) => f.filename));
   const reviewConfig = { ...config, rules };
   const rulesNote = rulesChangeNote(files.map((f) => f.filename));
+
+  // Review mode: PR label / description line (unless `prOverride: none`), then config `autoMode`, config `mode`, `standard`.
+  const selection = selectMode({
+    labels: (pr.data.labels ?? []).map((l) => (typeof l === "string" ? l : (l.name ?? ""))),
+    description: pr.data.body,
+    config,
+    stats: { files: reviewable.map((f) => f.filename), linesChanged: reviewable.reduce((n, f) => n + (f.additions ?? 0) + (f.deletions ?? 0), 0) },
+  });
+  const preset = MODE_PRESETS[selection.mode];
+  const reviewMode = { preset, selection };
+  // One deadline for the whole review (tarball download plus the model loop), counted from the start of the handler.
+  const deadlineMs = Math.min(settings.timeoutSec, preset.timeoutSec) * 1000;
+  const signal = AbortSignal.timeout(Math.max(1, deadlineMs - (Date.now() - started)));
 
   const valid = new Map(reviewable.map((f) => [f.filename, commentableLines(f.patch)]));
   const fullDiff = reviewable.map((f) => `--- a/${f.filename}\n+++ b/${f.filename}\n${f.patch}`).join("\n");
@@ -169,13 +182,13 @@ export async function reviewPullRequest(ev: PullRequestEvent, deps: ReviewPrDeps
     }
   }
 
-  const tracker = new CostTracker({ maxUsd: settings.budgetUsd });
+  const tracker = new CostTracker({ maxUsd: settings.budgetUsd ?? preset.budgetUsd });
   let result: Awaited<ReturnType<typeof reviewDiff>>;
   try {
     if (mode === "agent") {
       result = await reviewDiff(
         { diff, docs, context: {}, title: pr.data.title, description: pr.data.body ?? "" },
-        { config: reviewConfig, model: deps.model, mode: "agent", workspace, costTracker: tracker, abortSignal: signal },
+        { config: reviewConfig, model: deps.model, mode: "agent", workspace, costTracker: tracker, abortSignal: signal, reviewMode },
       );
     } else {
       const context: ReviewInput["context"] = {};
@@ -187,7 +200,7 @@ export async function reviewPullRequest(ev: PullRequestEvent, deps: ReviewPrDeps
       );
       result = await reviewDiff(
         { diff, docs, context, title: pr.data.title, description: pr.data.body ?? "" },
-        { config: reviewConfig, model: deps.model, costTracker: tracker, abortSignal: signal },
+        { config: reviewConfig, model: deps.model, costTracker: tracker, abortSignal: signal, reviewMode },
       );
     }
   } finally {
@@ -197,6 +210,8 @@ export async function reviewPullRequest(ev: PullRequestEvent, deps: ReviewPrDeps
   log("review.analyzed", {
     ...at,
     mode,
+    reviewMode: selection.mode,
+    modeSource: selection.source,
     ms: Date.now() - started,
     costUsd: result.costUsd,
     findings: result.findings.length,
