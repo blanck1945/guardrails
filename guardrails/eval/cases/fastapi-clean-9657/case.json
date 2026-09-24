@@ -1,0 +1,10 @@
+{
+  "id": "fastapi-clean-9657",
+  "repo": "https://github.com/fastapi/fastapi",
+  "baseSha": "df58ecdee2eda8bbac7fb8b8bcb00c4479e5d6db",
+  "headSha": "17e49bc9f75d9f596eb3fea42a3f51f3a716475c",
+  "source": "clean",
+  "language": "py",
+  "validated": false,
+  "bugs": []
+}

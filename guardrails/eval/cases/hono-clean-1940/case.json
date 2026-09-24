@@ -1,0 +1,10 @@
+{
+  "id": "hono-clean-1940",
+  "repo": "https://github.com/honojs/hono",
+  "baseSha": "d469ed9347e3ed50ce2f2b5f74fc6f587971f4c1",
+  "headSha": "ff34b1ba9adab6e1c9050c2d6a5ef705de31682e",
+  "source": "clean",
+  "language": "ts",
+  "validated": false,
+  "bugs": []
+}

@@ -1,0 +1,10 @@
+{
+  "id": "trpc-clean-706",
+  "repo": "https://github.com/trpc/trpc",
+  "baseSha": "be9d168e0b994d28af32875b7ca3942ab956e3bf",
+  "headSha": "3a7561358d41b8a0dd1bb3147c12b19ffeb30f56",
+  "source": "clean",
+  "language": "ts",
+  "validated": false,
+  "bugs": []
+}

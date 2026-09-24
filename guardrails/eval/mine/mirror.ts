@@ -58,7 +58,7 @@ export function fileLanguageGroup(file: string): "ts" | "py" | null {
 }
 
 /** Build scripts, CI, tooling: not product code. */
-const TOOLING_PATH = /^(build|tools?|bin|\.github|\.husky|config|playground|runtime-tests?)\//i;
+const TOOLING_PATH = /^(build|tools?|bin|\.github|\.husky|config|playground|runtime-tests?)\/|(^|\/)(www|www-old|website|docs_src|docs|sandbox|examples?)(\/|$)/i;
 
 export function isSource(file: string): boolean {
   const g = fileLanguageGroup(file);
@@ -75,7 +75,7 @@ export interface MergedCommit {
 }
 
 const PR_SUFFIX = /\(#(\d+)\)\s*$/;
-const NOT_A_FEATURE = /\bfix(?:es|ed)?\b|🐛|\brevert\b|^bump\b|\(deps|⬆|📝|🌐|👷|🔧|✏/i;
+const NOT_A_FEATURE = /^docs\b|^ci\b|^chore\(deps|\bfix(?:es|ed)?\b|🐛|\brevert\b|^bump\b|\(deps|⬆|📝|🌐|👷|🔧|✏/i;
 
 export function looksLikeFix(subject: string): boolean {
   return isFixPr(subject, []) || NOT_A_FEATURE.test(subject);

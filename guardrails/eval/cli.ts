@@ -1,6 +1,8 @@
 import { parseArgs } from "node:util";
 import { loadCases, loadRepos } from "./loader";
+import { mineClean } from "./mine/clean";
 import { mineInject } from "./mine/inject";
+import { mineInjection } from "./mine/injection";
 import { mineSzz } from "./mine/szz";
 
 async function validate(): Promise<number> {
@@ -44,9 +46,37 @@ async function mineInjectCmd(rest: string[]): Promise<number> {
   return code;
 }
 
+async function mineCleanCmd(rest: string[]): Promise<number> {
+  const { values } = parseArgs({ args: rest, options: { repo: { type: "string", multiple: true }, count: { type: "string", default: "5" } } });
+  const count = Number(values.count);
+  if (!values.repo?.length || !Number.isInteger(count) || count < 1) {
+    console.error(MINE_USAGE);
+    return 2;
+  }
+  let code = 0;
+  for (const repo of values.repo) {
+    console.log(`== clean ${repo} (count ${count})`);
+    try {
+      const r = await mineClean({ repo, count, log: (m) => console.log(m) });
+      console.log(`${repo}: ${r.created} created, ${r.existing} pre-existing, ${r.eligible} eligible PRs` + (r.shortfall ? `; SHORTFALL ${r.shortfall}` : ""));
+      if (r.shortfall) code = 1;
+    } catch (e) {
+      console.error(`${repo}: ${e instanceof Error ? e.message : String(e)}`);
+      code = 1;
+    }
+  }
+  return code;
+}
+
 async function mine(argv: string[]): Promise<number> {
   const [sub, ...rest] = argv;
   if (sub === "inject") return mineInjectCmd(rest);
+  if (sub === "clean") return mineCleanCmd(rest);
+  if (sub === "injection") {
+    const r = await mineInjection((m) => console.log(m));
+    console.log(`injection: ${r.created.length} cases written`);
+    return 0;
+  }
   if (sub !== "szz") {
     console.error(MINE_USAGE);
     return 2;
