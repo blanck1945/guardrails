@@ -1,5 +1,5 @@
 /**
- * Local CLI. Usage: pnpm guardrails init [--path <dir>] [--write] [--min-confidence <0-1>]
+ * Local CLI. `pnpm guardrails smoke` runs one minimal real-model check (see smoke.ts). Usage: pnpm guardrails init [--path <dir>] [--write] [--min-confidence <0-1>]
  *                                        [--include-tool-enforced] [--model <id>]
  *                                        [--budget-usd <N>] [--dry-run] [--yes] [--llm-cache]
  * Model: `--model` or GUARDRAILS_MODEL (`zai:<id>`, `deepseek:<id>` or an AI Gateway id). Needs the matching
@@ -28,6 +28,17 @@ async function readOptional(file: string): Promise<string | null> {
 }
 
 async function main(argv: string[]): Promise<number> {
+  if (argv[0] === "smoke") {
+    for (const file of [".env.local", ".env"]) {
+      try {
+        process.loadEnvFile(file);
+      } catch {
+        /* missing */
+      }
+    }
+    await (await import("./smoke")).smoke();
+    return Number(process.exitCode ?? 0);
+  }
   const { values, positionals } = parseArgs({
     args: argv,
     allowPositionals: true,
