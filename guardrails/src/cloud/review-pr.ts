@@ -1,10 +1,20 @@
-import { reviewDiff, type Finding, type ReviewInput, type Rule } from "@/core";
+import type { LanguageModel } from "ai";
+import { reviewDiff, type Finding, type ReviewInput, type ReviewMode, type Rule } from "@/core";
 import { commentableLines } from "./diff";
 import { DEFAULT_IGNORES, isIgnored } from "@/core/paths";
-import { installationOctokit } from "./github";
+import {
+  asTarballOctokit,
+  RepoTooLargeError,
+  TarballDownloadError,
+  TarballWorkspace,
+  type CreateTarballWorkspaceOptions,
+  type Workspace,
+} from "@/core/workspace";
+import { installationOctokit, type Octo } from "./github";
+import { log } from "./log";
 import { loadReviewRules, ruleCitation, rulesChangeNote, rulesForPr } from "./review-rules";
 
-import { BudgetExceededError } from "@/core/cost";
+import { BudgetExceededError, CostTracker } from "@/core/cost";
 import { configSchema } from "@/core/config";
 import { CONFIG_PATH } from "./review-rules";
 import type { PullRequestEvent, Triggers } from "./webhook";
@@ -24,8 +34,49 @@ export class DiffTooLargeError extends Error {
 const DOC_PATHS = ["CONTRIBUTING.md", "README.md"];
 const SEVERITY_ICON = { low: "🟢", medium: "🟡", high: "🔴" } as const;
 
+export const DEFAULT_REVIEW_BUDGET_USD = 0.25;
+export const DEFAULT_REVIEW_TIMEOUT_SEC = 240;
+
+export interface ReviewSettings {
+  mode: ReviewMode;
+  budgetUsd: number;
+  timeoutSec: number;
+}
+
+function positiveNumber(raw: string | undefined, fallback: number): number {
+  const n = raw === undefined || raw.trim() === "" ? NaN : Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
+/** `GUARDRAILS_MODE` (agent|single, default agent), `GUARDRAILS_REVIEW_BUDGET_USD`, `GUARDRAILS_REVIEW_TIMEOUT_SEC`. */
+export function reviewSettings(env: Record<string, string | undefined> = process.env): ReviewSettings {
+  return {
+    mode: env.GUARDRAILS_MODE?.trim().toLowerCase() === "single" ? "single" : "agent",
+    budgetUsd: positiveNumber(env.GUARDRAILS_REVIEW_BUDGET_USD, DEFAULT_REVIEW_BUDGET_USD),
+    timeoutSec: positiveNumber(env.GUARDRAILS_REVIEW_TIMEOUT_SEC, DEFAULT_REVIEW_TIMEOUT_SEC),
+  };
+}
+
+/** A workspace that owns temporary files and must be disposed. */
+export type DisposableWorkspace = Workspace & { dispose(): Promise<void> };
+
+export interface ReviewPrDeps {
+  octokit?: (installationId: number) => Promise<Octo>;
+  createWorkspace?: (opts: CreateTarballWorkspaceOptions) => Promise<DisposableWorkspace>;
+  env?: Record<string, string | undefined>;
+  /** Model override (tests). Default: `GUARDRAILS_MODEL`. */
+  model?: LanguageModel;
+}
+
+/** Why the agent could not start, as a short stable label for logs (never the error message). */
+function fallbackReason(err: unknown): string {
+  if (err instanceof RepoTooLargeError) return "repo-too-large";
+  if (err instanceof TarballDownloadError) return err.kind === "timeout" ? "download-timeout" : "download-failed";
+  return "workspace-failed";
+}
+
 async function readFile(
-  octo: Awaited<ReturnType<typeof installationOctokit>>,
+  octo: Octo,
   owner: string,
   repo: string,
   path: string,
@@ -47,12 +98,19 @@ function citation(f: Finding, rules: readonly Rule[]): string {
 }
 
 /**
- * MVP: reads the PR through the GitHub API (no clone yet).
- * Phase 2 replaces this with a sandbox that clones the repo and runs the agent.
+ * Reviews a PR. Default mode is `agent`: base and head are downloaded as tarballs through the GitHub API into the
+ * function's temp disk and the agent reads them (nothing from the repo is executed). If the tarballs cannot be
+ * obtained (download error, too large, too slow) it falls back to `single` mode, which reads files through the API.
  */
-export async function reviewPullRequest(ev: PullRequestEvent) {
-  const octo = await installationOctokit(ev.installationId);
+export async function reviewPullRequest(ev: PullRequestEvent, deps: ReviewPrDeps = {}) {
+  const settings = reviewSettings(deps.env);
+  const octo = await (deps.octokit ?? installationOctokit)(ev.installationId);
+  const createWorkspace = deps.createWorkspace ?? ((o: CreateTarballWorkspaceOptions) => TarballWorkspace.create(o));
   const { owner, repo, number, headSha } = ev;
+  const at = { repo: `${owner}/${repo}`, pr: number };
+  const started = Date.now();
+  // One deadline for the whole review: tarball download plus the model loop.
+  const signal = AbortSignal.timeout(settings.timeoutSec * 1000);
 
   const [pr, files] = await Promise.all([
     octo.rest.pulls.get({ owner, repo, pull_number: number }),
@@ -77,10 +135,8 @@ export async function reviewPullRequest(ev: PullRequestEvent) {
   const rulesNote = rulesChangeNote(files.map((f) => f.filename));
 
   const valid = new Map(reviewable.map((f) => [f.filename, commentableLines(f.patch)]));
-  const diff = reviewable
-    .map((f) => `--- a/${f.filename}\n+++ b/${f.filename}\n${f.patch}`)
-    .join("\n")
-    .slice(0, MAX_DIFF_CHARS);
+  const fullDiff = reviewable.map((f) => `--- a/${f.filename}\n+++ b/${f.filename}\n${f.patch}`).join("\n");
+  const diff = fullDiff.slice(0, MAX_DIFF_CHARS);
 
   const docs: ReviewInput["docs"] = {};
   const docPaths = [...DOC_PATHS, ...config.files.map((f) => f.path)];
@@ -91,24 +147,71 @@ export async function reviewPullRequest(ev: PullRequestEvent) {
     }),
   );
 
-  const context: ReviewInput["context"] = {};
-  await Promise.all(
-    reviewable.slice(0, 15).map(async (f) => {
-      const c = await readFile(octo, owner, repo, f.filename, headSha);
-      if (c) context[f.filename] = c.slice(0, 30_000);
-    }),
-  );
+  // Agent mode: tarballs of base and head that the agent's tools read.
+  let workspace: DisposableWorkspace | undefined;
+  let mode: ReviewMode = settings.mode;
+  if (mode === "agent") {
+    try {
+      workspace = await createWorkspace({
+        octokit: asTarballOctokit(octo),
+        owner,
+        repo,
+        baseRef: pr.data.base.sha,
+        // A fork commit is not addressable by name in the base repo; the PR ref of the base repo always has it.
+        headRef: ev.isFork ? `refs/pull/${number}/head` : headSha,
+        diff: fullDiff,
+        signal,
+      });
+    } catch (err) {
+      if (signal.aborted) throw err; // the review-wide timeout is not a reason to start over
+      mode = "single";
+      log("review.fallback", { ...at, reason: fallbackReason(err), from: "agent", to: "single" });
+    }
+  }
 
-  const result = await reviewDiff(
-    { diff, docs, context, title: pr.data.title, description: pr.data.body ?? "" },
-    { config: reviewConfig },
-  );
+  const tracker = new CostTracker({ maxUsd: settings.budgetUsd });
+  let result: Awaited<ReturnType<typeof reviewDiff>>;
+  try {
+    if (mode === "agent") {
+      result = await reviewDiff(
+        { diff, docs, context: {}, title: pr.data.title, description: pr.data.body ?? "" },
+        { config: reviewConfig, model: deps.model, mode: "agent", workspace, costTracker: tracker, abortSignal: signal },
+      );
+    } else {
+      const context: ReviewInput["context"] = {};
+      await Promise.all(
+        reviewable.slice(0, 15).map(async (f) => {
+          const c = await readFile(octo, owner, repo, f.filename, headSha);
+          if (c) context[f.filename] = c.slice(0, 30_000);
+        }),
+      );
+      result = await reviewDiff(
+        { diff, docs, context, title: pr.data.title, description: pr.data.body ?? "" },
+        { config: reviewConfig, model: deps.model, costTracker: tracker, abortSignal: signal },
+      );
+    }
+  } finally {
+    // Always: the temp directories hold client code.
+    await workspace?.dispose().catch(() => log("review.dispose-failed", at));
+  }
+  log("review.analyzed", {
+    ...at,
+    mode,
+    ms: Date.now() - started,
+    costUsd: result.costUsd,
+    findings: result.findings.length,
+    incomplete: result.incomplete === true,
+  });
+  const summary =
+    result.incomplete && !result.summary
+      ? "The analysis of this change could not be completed. Push a new commit to try again."
+      : result.summary;
 
   const inline = result.findings.filter((f) => valid.get(f.file)?.has(f.line));
   const orphan = result.findings.filter((f) => !inline.includes(f));
 
   const body =
-    `**Guardrails**\n\n${result.summary}` +
+    `**Guardrails**\n\n${summary}` +
     (rulesNote ? `\n\n${rulesNote}` : "") +
     (orphan.length
       ? "\n\n" +
@@ -152,11 +255,12 @@ export async function loadTriggersFromBase(ev: PullRequestEvent): Promise<Trigge
   return parsed.success ? parsed.data : configSchema.shape.triggers.parse(undefined);
 }
 
-export type FailureKind = "diff-too-large" | "rate-limit" | "budget" | "other";
+export type FailureKind = "diff-too-large" | "rate-limit" | "budget" | "timeout" | "other";
 
 export function classifyFailure(err: unknown): FailureKind {
   if (err instanceof DiffTooLargeError) return "diff-too-large";
   if (err instanceof BudgetExceededError) return "budget";
+  if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) return "timeout";
   const e = err as { status?: number; statusCode?: number; response?: { headers?: Record<string, string> } } | null;
   const status = e?.status ?? e?.statusCode;
   if (status === 429) return "rate-limit";
@@ -169,6 +273,7 @@ export const FAILURE_MESSAGES: Record<Exclude<FailureKind, "other">, string> = {
   "diff-too-large": `**Guardrails** skipped this pull request: the change is too large for one review (limit: ${MAX_DIFF_CHARS.toLocaleString("en-US")} characters of diff). Split it into smaller pull requests, or add \`skip-guardrails\` to opt out.`,
   "rate-limit": "**Guardrails** could not review this pull request: a rate limit was hit. Push a new commit to try again.",
   budget: "**Guardrails** stopped this review because it reached its spend limit. Push a new commit to try again.",
+  timeout: "**Guardrails** stopped this review because it ran out of time. Push a new commit to try again.",
 };
 
 /** Posts a short notice for known limit failures. Other failures are only logged (no noise on transient errors). */
