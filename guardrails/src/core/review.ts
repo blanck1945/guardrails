@@ -1,4 +1,5 @@
 import { generateText, Output, type LanguageModel } from "ai";
+import { defaultModelSpec, resolveModel } from "./models";
 import { runReviewAgent } from "./agent/loop";
 import { emptyUsage, sumUsage, type UsageTotals } from "./agent/budget";
 import type { GuardrailsConfig } from "./config";
@@ -8,13 +9,12 @@ import { reviewResultSchema, type Finding, type ReviewInput } from "./types";
 import type { Workspace } from "./workspace";
 
 const MIN_CONFIDENCE = { 1: 0.8, 2: 0.6, 3: 0.4 } as const;
-const DEFAULT_MODEL = "anthropic/claude-sonnet-5";
 
 export type ReviewMode = "single" | "agent";
 
 export interface ReviewOptions {
   config: GuardrailsConfig;
-  /** Gateway model id or a `LanguageModel` instance. */
+  /** Model spec (`zai:<id>`, `deepseek:<id>`, or a Gateway id) or a `LanguageModel` instance. */
   model?: LanguageModel;
   /** `single` = one call, no tools (eval baseline). `agent` = tool loop; needs `workspace`. */
   mode?: ReviewMode;
@@ -41,7 +41,7 @@ export async function reviewDiff(
   input: ReviewInput,
   {
     config,
-    model = process.env.GUARDRAILS_MODEL ?? DEFAULT_MODEL,
+    model = defaultModelSpec(),
     mode = "single",
     workspace,
     abortSignal,
@@ -66,7 +66,7 @@ export async function reviewDiff(
   }
 
   const result = await generateText({
-    model,
+    model: resolveModel(model),
     output: Output.object({ schema: reviewResultSchema }),
     instructions: buildSystemPrompt(config),
     prompt: buildUserPrompt(input),

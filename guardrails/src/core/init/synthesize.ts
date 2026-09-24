@@ -1,9 +1,9 @@
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import { emptyUsage, sumUsage, type UsageTotals } from "../agent/budget";
+import { defaultModelSpec, resolveModel } from "../models";
 import type { RepoContext } from "./collect";
 
-const DEFAULT_MODEL = "anthropic/claude-sonnet-5";
 export const MAX_CANDIDATES = 30;
 
 export const candidateKinds = ["diff-checkable", "context-only", "tool-enforced"] as const;
@@ -91,11 +91,11 @@ export interface SynthesisResult {
 /** One structured-output call over the collected context. No tools: the model only sees what the collector read. */
 export async function synthesizeRules(
   context: RepoContext,
-  { model = process.env.GUARDRAILS_MODEL ?? DEFAULT_MODEL, abortSignal }: SynthesizeOptions = {},
+  { model = defaultModelSpec(), abortSignal }: SynthesizeOptions = {},
 ): Promise<SynthesisResult> {
   if (!context.files.length) return { candidates: [], usage: emptyUsage() };
   const result = await generateText({
-    model,
+    model: resolveModel(model),
     output: Output.object({ schema: synthesisSchema }),
     instructions: SYNTHESIS_INSTRUCTIONS,
     prompt: buildSynthesisPrompt(context),

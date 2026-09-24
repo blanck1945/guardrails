@@ -12,6 +12,7 @@
     "check": "pnpm typecheck && pnpm test"
   },
   "dependencies": {
+    "@ai-sdk/openai-compatible": "^3.0.55",
     "ai": "^7.0.112",
     "next": "^16.3.6",
     "octokit": "^5.0.5",

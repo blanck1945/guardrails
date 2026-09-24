@@ -1,7 +1,8 @@
 /**
  * Local CLI. Usage: pnpm guardrails init [--path <dir>] [--write] [--min-confidence <0-1>]
  *                                        [--include-tool-enforced] [--model <id>]
- * Needs a model credential in the environment (AI_GATEWAY_API_KEY, see .env.example).
+ * Model: `--model` or GUARDRAILS_MODEL (`zai:<id>`, `deepseek:<id>` or an AI Gateway id). Needs the matching
+ * credential in the environment or .env.local (ZAI_API_KEY, DEEPSEEK_API_KEY, AI_GATEWAY_API_KEY; see .env.example).
  */
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -43,10 +44,12 @@ async function main(argv: string[]): Promise<number> {
   }
 
   // The tool's own credentials (never the target repo's .env).
-  try {
-    process.loadEnvFile(".env");
-  } catch {
-    /* no .env in cwd: rely on the process environment */
+  for (const file of [".env.local", ".env"]) {
+    try {
+      process.loadEnvFile(file); // never overrides variables that are already set
+    } catch {
+      /* file missing: rely on the process environment */
+    }
   }
 
   const root = path.resolve(values.path);
