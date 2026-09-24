@@ -6,9 +6,7 @@ import type { AgentBudget } from "./budget";
 
 /** Agent prompts are in English (PLAN-DETAILED §3.5). Role: "general" (F1). */
 export function buildAgentInstructions(config: GuardrailsConfig, budget: AgentBudget): string {
-  const rules = config.rules
-    .map((r) => `- [${r.id}] (${r.severity}, scope: ${r.scope.join(", ")}) ${r.rule}`)
-    .join("\n");
+  const rules = formatRulesForPrompt(config.rules);
 
   return [
     "You are part of Guardrails, an automated pull request reviewer.",

@@ -2,6 +2,7 @@ import { generateText, Output, type LanguageModel } from "ai";
 import { runReviewAgent } from "./agent/loop";
 import { emptyUsage, sumUsage, type UsageTotals } from "./agent/budget";
 import type { GuardrailsConfig } from "./config";
+import { dropUnknownRuleFindings } from "./rules/select";
 import { buildSystemPrompt, buildUserPrompt } from "./prompt";
 import { reviewResultSchema, type Finding, type ReviewInput } from "./types";
 import type { Workspace } from "./workspace";
@@ -47,14 +48,16 @@ export async function reviewDiff(
   }: ReviewOptions,
 ): Promise<ReviewOutput> {
   const min = MIN_CONFIDENCE[config.strictness as 1 | 2 | 3];
-  const keep = (f: Finding) => f.confidence >= min && config.commentTypes.includes(f.type);
+  const keepBasic = (f: Finding) => f.confidence >= min && config.commentTypes.includes(f.type);
+  // A finding may only cite a rule that was given to the model (active rules in `config.rules`).
+  const filterFindings = (fs: Finding[]) => dropUnknownRuleFindings(fs.filter(keepBasic), config.rules);
 
   if (mode === "agent") {
     if (!workspace) throw new Error("reviewDiff: mode 'agent' requires a workspace");
     const run = await runReviewAgent({ model, config, workspace, input, abortSignal });
     return {
       summary: run.notes ?? "",
-      findings: run.findings.filter(keep),
+      findings: filterFindings(run.findings),
       mode,
       usage: run.usage,
       incomplete: run.incomplete,
@@ -72,7 +75,7 @@ export async function reviewDiff(
 
   return {
     summary: result.output.summary,
-    findings: result.output.findings.filter(keep),
+    findings: filterFindings(result.output.findings),
     mode,
     usage: result.steps.length ? sumUsage(result.steps.map((s) => s.usage)) : emptyUsage(),
   };

@@ -9,9 +9,7 @@ export const STRICTNESS = {
 } as const;
 
 export function buildSystemPrompt(config: GuardrailsConfig): string {
-  const rules = config.rules
-    .map((r) => `- [${r.id}] (${r.severity}, scope: ${r.scope.join(", ")}) ${r.rule}`)
-    .join("\n");
+  const rules = formatRulesForPrompt(config.rules);
 
   return [
     "You are a senior code reviewer. Review the pull request diff with the repository context provided.",

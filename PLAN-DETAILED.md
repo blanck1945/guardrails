@@ -360,6 +360,35 @@ Formato: `packs/<id>/pack.json` `{id, version, name, detect, rules:[{id, rule, s
 
 Gate de cada pack: fixtures ≥90% correctos y ≤0.2 comentarios inválidos del pack por PR limpio del golden set.
 
+### 6.4 Reglas, init y rules.md (implementado en B30-B32)
+**Formato de `.guardrails/rules.md`** (legible y editable a mano). Un bloque por regla:
+
+```markdown
+# Guardrails rules            <- preámbulo: se ignora, se conserva al reescribir
+
+## english-only                <- id kebab-case, único
+scope: src/**, docs/**        <- globs separados por coma (llaves `{a,b}` OK); default `**`
+severity: high                <- low | medium (default) | high
+source: CLAUDE.md             <- archivo de origen o `user`
+status: active                <- active (default) | suggested | disabled
+
+Todo el código, comentarios y prompts en inglés. Cuerpo en lenguaje natural, con ejemplos o código.
+```
+
+- Un `## ` dentro de un bloque de código del cuerpo no abre otra regla. Una regla inválida (id no kebab, severidad/status inválidos, cuerpo vacío, id repetido) se reporta con su número de línea y se omite; las demás siguen. `parseRulesMd` nunca lanza; `serializeRulesMd` es estable (parse∘serialize = identidad).
+- `loadRules(configJson, rulesMd)`: mezcla `config.rules` con las de rules.md (**gana el md** ante id repetido); `disabledRules` del config y `status: disabled` las desactivan. Solo `active` llega al review.
+
+**Flujo:** `pnpm guardrails init [--path d] [--write] [--min-confidence 0.6] [--include-tool-enforced]` → colector determinista (CLAUDE.md/AGENTS.md/.cursorrules, lessons, CONTRIBUTING, configs de lint/TS, workflows de CI, estructura; topes por archivo 12k chars y total 80k; sin ignorados ni secretos, con redacción de strings tipo token) → 1 llamada al modelo (`Output.object`) que devuelve candidatas `{id, rule, scope, severity, source, confidence, kind}` → filtro (`tool-enforced` y baja confianza se listan aparte) → con `--write` se **agregan al final** de rules.md como `status: suggested` → el usuario revisa y cambia a `active` → en cada PR el review usa solo las `active`.
+
+**Review por PR:** `.guardrails/config.json` y `rules.md` se leen del commit **base** (`pr.base.sha`), no del head (un PR no puede debilitar su propio review; si no existen en base, defaults). Solo entran al prompt las reglas cuyo `scope` matchea algún archivo modificado (picomatch; un glob sin `/` matchea por basename). Los prompts (single y agent) listan id, severidad, scope, source y cuerpo. Un finding con `ruleId` que no está entre las reglas entregadas se descarta. El comentario cita `Rule \`id\` (source)`. Si el PR toca `rules.md` o `config.json`, el resumen lo indica (informativo).
+
+**Decisiones:**
+- `source`/`status` viven en `ruleSchema` del config, así config.json y rules.md comparten tipo.
+- `init` nunca reescribe rules.md: solo agrega bloques al final (respeta reglas del usuario, comentarios y hasta bloques inválidos). Se saltean ids ya presentes en rules.md, en config, en `disabledRules`, y reglas con texto idéntico; `source: user` está reservado (las generadas usan `inferred` si el modelo lo pusiera).
+- Lo que el linter/tsc ya hace cumplir se marca `tool-enforced` **solo si algo (CI/hook) lo ejecuta**; si hay config pero nada lo corre, queda `diff-checkable` con menos confianza. Así una regla de `.oxlintrc.json` que CI no ejecuta sí se sugiere.
+- Los documentos del repo van dentro de `<untrusted>` en el prompt del sintetizador (§8).
+- Límites conocidos: el colector usa `git ls-files` (solo archivos versionados); `init` no detecta reglas semánticamente duplicadas con ids distintos más allá del texto idéntico.
+
 ---
 
 ## 7. Set de evaluación (Fase 0)
