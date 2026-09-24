@@ -6,6 +6,8 @@ import { defaultModelSpec, jsonOnlyInstruction, modelSpecOf, resolveModel } from
 import { estimateCostUsd } from "./pricing";
 import { samplingFor } from "./sampling";
 import { runReviewAgent } from "./agent/loop";
+import type { RuleChecksMode } from "./agent/prompts";
+import type { RuleCheck } from "./findings/schema";
 import { emptyUsage, sumUsage, type UsageTotals } from "./agent/budget";
 import type { GuardrailsConfig } from "./config";
 import { capFindings, capFor, collapseByLocation } from "./findings/limits";
@@ -39,6 +41,8 @@ export interface ReviewOptions {
   costTracker?: CostTracker;
   /** Temperature preferred by the review mode (`GUARDRAILS_TEMPERATURE` overrides it). */
   temperature?: number;
+  /** Per-rule verdict pass: `off` (basic), `ask` (default), `require` (deep: one bounce for an incomplete report). */
+  ruleChecks?: RuleChecksMode;
 }
 
 export interface ReviewOutput {
@@ -58,6 +62,8 @@ export interface ReviewOutput {
   checks: { ran: string[]; skipped: CheckSkip[]; findings: number };
   /** Set when the model part failed or ran out of budget/time; `findings` then holds only the check findings. */
   modelIncomplete?: "budget" | "timeout" | "error";
+  /** Verdicts of the exhaustive per-rule pass (agent mode), when the model returned them. */
+  ruleChecks?: RuleCheck[];
 }
 
 function classifyModelFailure(err: unknown, signal?: AbortSignal): "budget" | "timeout" | "error" {
@@ -82,6 +88,7 @@ export async function reviewDiff(
     abortSignal,
     costTracker,
     temperature,
+    ruleChecks,
   }: ReviewOptions,
 ): Promise<ReviewOutput> {
   const before = costTracker?.snapshot();
@@ -155,9 +162,9 @@ export async function reviewDiff(
   const modelPart = async () => {
     if (mode === "agent") {
       if (!workspace) throw new Error("reviewDiff: mode 'agent' requires a workspace");
-      const run = await runReviewAgent({ model, config, workspace, input, abortSignal, costTracker, mechanicalRuleIds: mechanical, temperature });
+      const run = await runReviewAgent({ model, config, workspace, input, abortSignal, costTracker, mechanicalRuleIds: mechanical, temperature, ruleChecks });
       const v = await verify(run.findings);
-      return { ...v, summary: run.notes ?? "", usage: run.usage, incomplete: run.incomplete, notes: run.notes };
+      return { ...v, summary: run.notes ?? "", usage: run.usage, incomplete: run.incomplete, notes: run.notes, ruleChecks: run.ruleChecks };
     }
     const result = await generateText({
       model: resolveModel(model, { tracker: costTracker }),
@@ -171,7 +178,7 @@ ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
     });
     const usage = result.steps.length ? sumUsage(result.steps.map((s) => s.usage)) : emptyUsage();
     const v = await verify(result.output.findings);
-    return { ...v, summary: result.output.summary, usage, incomplete: undefined, notes: undefined };
+    return { ...v, summary: result.output.summary, usage, incomplete: undefined, notes: undefined, ruleChecks: undefined };
   };
 
   let part: Awaited<ReturnType<typeof modelPart>>;
@@ -182,7 +189,7 @@ ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
     // Without any check finding there is nothing to publish: the caller reports the failure as before.
     if (!checkFindings.length) throw err;
     failure = classifyModelFailure(err, abortSignal);
-    part = { findings: [], dropped: [], omitted: 0, summary: "", usage: emptyUsage(), incomplete: true, notes: undefined };
+    part = { findings: [], dropped: [], omitted: 0, summary: "", usage: emptyUsage(), incomplete: true, notes: undefined, ruleChecks: undefined };
   }
   return {
     summary: withChecks(withOmitted(part.summary, part.omitted), failure),
@@ -193,6 +200,7 @@ ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
     costUsd: costOf(part.usage),
     ...(part.incomplete !== undefined ? { incomplete: part.incomplete } : {}),
     ...(part.notes !== undefined ? { notes: part.notes } : {}),
+    ...(part.ruleChecks ? { ruleChecks: part.ruleChecks } : {}),
     checks: checksMeta,
     ...(failure ? { modelIncomplete: failure } : {}),
   };

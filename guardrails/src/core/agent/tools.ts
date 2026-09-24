@@ -1,6 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { reportFindingsSchema, type FindingV2 } from "../findings";
+import { reportFindingsSchema, type FindingV2, type RuleCheck } from "../findings";
 import { WorkspaceError, type Workspace } from "../workspace";
 
 export const REPORT_TOOL = "report_findings";
@@ -56,18 +56,21 @@ export function createWorkspaceTools(ws: Workspace) {
 export interface Report {
   findings: FindingV2[];
   notes?: string | undefined;
+  ruleChecks?: RuleCheck[] | undefined;
 }
 
 /**
  * Terminal tool. `execute` only runs on input that passed zod validation; invalid
  * input is returned to the model as a tool error by the SDK (the retry path).
  */
-export function createReportTool(onReport: (report: Report) => void) {
+export function createReportTool(onReport: (report: Report) => void, reject?: (report: Report) => string | undefined) {
   return tool({
     description:
       "Report the final findings of the review. Call it exactly once when done; use an empty list if there are no issues.",
     inputSchema: reportFindingsSchema,
     execute: (report) => {
+      const why = reject?.(report);
+      if (why) return { ok: false, error: why };
       onReport(report);
       return { ok: true, count: report.findings.length };
     },

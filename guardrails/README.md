@@ -59,6 +59,7 @@ Components stay under 150 lines.
 | `forbid-pattern: <regex>` | an ADDED line matches the regex (max 200 characters, rejected if unsafe; `/re/i` flags `i` and `u` allowed). `forbid-pattern(comments|code|strings): <regex>` restricts it to that zone of TS/JS/TSX/JSX files |
 
 `exclude:` is a comma-separated list of globs removed from the rule scope. Check findings have confidence 1, the rule's severity and type, and the exact `file:line`; they are never filtered or capped. The model is told these rules are verified mechanically and must not report them again. If the model part of a review fails or times out, the check findings are still published.
+When the agent runs with per-rule verdicts (see review modes), rules with a check are excluded from that pass.
 Limits of `only`: regex literals are not recognised by the lexer, JSX text between tags counts as code, other file types are skipped. Without a workspace (the cloud single-mode fallback) `max-lines`, `colocated-test` and `only` are skipped and the model handles those rules.
 `guardrails init` proposes a `check:` when a rule allows it and drops an invalid one with a warning.
 

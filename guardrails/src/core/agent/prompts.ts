@@ -4,8 +4,29 @@ import { STRICTNESS } from "../prompt";
 import type { ReviewInput } from "../types";
 import type { AgentBudget } from "./budget";
 
+export type RuleChecksMode = "off" | "ask" | "require";
+/** `general` = the standard reviewer; `rules-and-logic` = second pass of deep mode: rules first, then logic bugs. */
+export type AgentFocus = "general" | "rules-and-logic";
+
+export interface AgentPromptOptions {
+  ruleChecks?: RuleChecksMode | undefined;
+  focus?: AgentFocus | undefined;
+}
+
+/** Exhaustive per-rule pass (B42c): a verdict per rule and file, and EVERY location of a violation. */
+export function ruleChecksInstructions(mode: RuleChecksMode, hasRules: boolean): string {
+  if (mode === "off" || !hasRules) return "";
+  return [
+    "Exhaustive rule pass. For EACH team rule listed above and EACH changed file inside its scope, decide a verdict: `violated`, `ok` or `not-applicable`, and return them in the `ruleChecks` field of report_findings as {ruleId, file, verdict, note?}. Do not close the review before every rule in scope has a verdict.",
+    "A violated rule is rarely violated in one place only: use grep and read_file over the ADDED lines (comments, string literals, names, imports, every new file) and report EVERY location as its own finding, not just the first one you notice. Check comments and identifiers as well as user-visible text.",
+    mode === "require" ? "A report without a verdict for every rule in scope is rejected once and you must complete it." : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
 /** Agent prompts are in English (PLAN-DETAILED §3.5). Role: "general" (F1). */
-export function buildAgentInstructions(config: GuardrailsConfig, budget: AgentBudget, mechanical: ReadonlySet<string> = new Set()): string {
+export function buildAgentInstructions(config: GuardrailsConfig, budget: AgentBudget, mechanical: ReadonlySet<string> = new Set(), opts: AgentPromptOptions = {}): string {
   const rules = formatRulesForPrompt(config.rules, mechanical);
   const mechanicalNote = formatMechanicalNote(config.rules, mechanical);
 
@@ -28,6 +49,8 @@ export function buildAgentInstructions(config: GuardrailsConfig, budget: AgentBu
     config.instructions && `Team instructions:\n${config.instructions}`,
     rules && `Team rules. Whenever a finding violates one of the rules listed below, you MUST set its ruleId field to that rule's id (exactly as listed) and cite the id and its source in the finding body. Rule violations are reported even if their type is not in the list above:\n${rules}`,
     mechanicalNote,
+    ruleChecksInstructions(opts.ruleChecks ?? "ask", !!rules),
+    opts.focus === "rules-and-logic" && "Second-pass focus: an independent reviewer already did a general pass. Start with the team rules (verify each one on every changed file), then hunt logic bugs in the changed code (comparators, off-by-one, null handling, ordering, date and deadline logic). Prefer completeness over speed.",
   ]
     .filter(Boolean)
     .join("\n\n");

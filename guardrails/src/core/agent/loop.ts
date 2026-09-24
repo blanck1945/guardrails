@@ -3,7 +3,7 @@ import type { GuardrailsConfig } from "../config";
 import type { CostTracker } from "../cost";
 import { resolveModel } from "../models";
 import { samplingFor } from "../sampling";
-import { findingSchemaV2, type FindingV2 } from "../findings";
+import { findingSchemaV2, type FindingV2, type RuleCheck } from "../findings";
 import type { ReviewInput } from "../types";
 import type { Workspace } from "../workspace";
 import {
@@ -14,7 +14,7 @@ import {
   type AgentBudget,
   type UsageTotals,
 } from "./budget";
-import { buildAgentInstructions, buildAgentPrompt, WRAP_UP_MESSAGE } from "./prompts";
+import { buildAgentInstructions, buildAgentPrompt, WRAP_UP_MESSAGE, type AgentFocus, type RuleChecksMode } from "./prompts";
 import { createReportTool, createWorkspaceTools, REPORT_TOOL, type Report } from "./tools";
 
 export interface AgentRunOptions {
@@ -29,6 +29,10 @@ export interface AgentRunOptions {
   mechanicalRuleIds?: ReadonlySet<string> | undefined;
   /** Temperature preferred by the review mode (`GUARDRAILS_TEMPERATURE` overrides it). */
   temperature?: number | undefined;
+  /** `require`: a report that omits verdicts for rules in scope is bounced once (deep mode). Default `ask`. */
+  ruleChecks?: RuleChecksMode | undefined;
+  /** Second-pass focus (deep mode runs two passes). */
+  focus?: AgentFocus | undefined;
 }
 
 export interface AgentRunResult {
@@ -41,6 +45,8 @@ export interface AgentRunResult {
   invalidReports: number;
   /** True when the forced wrap-up step was triggered. */
   forcedWrapUp: boolean;
+  /** Verdicts from the exhaustive per-rule pass, when the model gave them. */
+  ruleChecks?: RuleCheck[] | undefined;
 }
 
 type AnyStep = StepResult<ToolSet, any>;
@@ -72,11 +78,29 @@ export async function runReviewAgent(opts: AgentRunOptions): Promise<AgentRunRes
   let forcedWrapUp = false;
   let elided = false;
 
+  const ruleChecksMode = opts.ruleChecks ?? "ask";
+  const skip = opts.mechanicalRuleIds ?? new Set<string>();
+  const requiredRules = ruleChecksMode === "off" ? [] : opts.config.rules.filter((r) => r.status === "active" && !skip.has(r.id)).map((r) => r.id);
+  const missingVerdicts = (r: Report) => requiredRules.filter((id) => !r.ruleChecks?.some((c) => c.ruleId === id));
+  let bounced = 0;
+  let bouncedReport: Report | undefined;
+
   const tools = {
     ...createWorkspaceTools(opts.workspace),
-    [REPORT_TOOL]: createReportTool((r) => {
-      report = r;
-    }),
+    [REPORT_TOOL]: createReportTool(
+      (r) => {
+        report = r;
+      },
+      (r) => {
+        // Deep mode: one bounce for a report that skips rules in scope; the second report is accepted as it is.
+        if (ruleChecksMode !== "require" || bounced >= 1) return undefined;
+        const missing = missingVerdicts(r);
+        if (!missing.length) return undefined;
+        bounced++;
+        bouncedReport = r;
+        return `Incomplete: ruleChecks has no verdict for rule(s) ${missing.join(", ")}. Add one entry per rule (and per changed file in its scope): violated, ok or not-applicable, and list every location of each violation. Then call report_findings again.`;
+      },
+    ),
   };
 
   const diff = opts.input.diff || (await opts.workspace.diff());
@@ -84,7 +108,7 @@ export async function runReviewAgent(opts: AgentRunOptions): Promise<AgentRunRes
 
   const result = await generateText({
     model: resolveModel(opts.model, { tracker: opts.costTracker }),
-    instructions: buildAgentInstructions(opts.config, budget, opts.mechanicalRuleIds),
+    instructions: buildAgentInstructions(opts.config, budget, opts.mechanicalRuleIds, { ruleChecks: ruleChecksMode, focus: opts.focus }),
     prompt: buildAgentPrompt(opts.input, diff),
     tools,
     // The model must always call a tool; the only way to finish is report_findings.
@@ -122,11 +146,16 @@ export async function runReviewAgent(opts: AgentRunOptions): Promise<AgentRunRes
   const usage = sumUsage(result.steps.map((s) => s.usage));
   const invalid = invalidReportCalls(result.steps);
 
-  if (report) {
-    const r = report as Report;
+  // A bounced report is better than nothing when the run ended before a second one.
+  const finalReport = (report ?? bouncedReport) as Report | undefined;
+  if (finalReport) {
+    const r = finalReport;
+    const incompleteChecks = ruleChecksMode === "require" && missingVerdicts(r).length > 0;
+    const notes = incompleteChecks ? [r.notes, "incomplete-rule-checks"].filter(Boolean).join("; ") : r.notes;
     return {
       findings: r.findings,
-      notes: r.notes,
+      notes,
+      ruleChecks: r.ruleChecks,
       usage,
       incomplete: false,
       invalidReports: invalid.length,
