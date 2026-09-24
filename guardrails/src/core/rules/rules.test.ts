@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadRules, type Rule } from "../config";
-import { activeRules, mergeRules, parseRulesMd, serializeRulesMd } from "./index";
+import { activeRules, mergeRules, parseRulesMd, ruleType, serializeRulesMd } from "./index";
 
 const mk = (over: Partial<Rule> & { id: string }): Rule => ({
   rule: "Do the thing.",
@@ -130,5 +130,54 @@ describe("mergeRules / loadRules", () => {
     expect(l.configErrors).toHaveLength(1);
     expect(l.rulesErrors).toHaveLength(1);
     expect(l.active).toEqual([]);
+  });
+});
+
+describe("rule type", () => {
+  it("parses type and defaults to undefined when absent (style is applied at review time)", () => {
+    const md = `## a-rule
+type: Security
+severity: high
+
+Body.
+
+## b-rule
+
+Body.
+`;
+    const { rules, errors } = parseRulesMd(md);
+    expect(errors).toEqual([]);
+    expect(rules.map((r) => r.type)).toEqual(["security", undefined]);
+    expect(ruleType(rules[0]!)).toBe("security");
+    expect(ruleType(rules[1]!)).toBe("style");
+  });
+
+  it("reports an invalid type with its line and skips that rule", () => {
+    const { rules, errors } = parseRulesMd(`## a-rule
+type: cosmetic
+
+Body.
+
+## ok-rule
+
+Body.
+`);
+    expect(rules.map((r) => r.id)).toEqual(["ok-rule"]);
+    expect(errors).toEqual([expect.objectContaining({ line: 2, id: "a-rule", message: expect.stringContaining("invalid type") })]);
+  });
+
+  it("round-trips stably", () => {
+    const rules = [mk({ id: "x", type: "logic", source: "CLAUDE.md" }), mk({ id: "y" })];
+    const md = serializeRulesMd(rules);
+    expect(md).toContain("type: logic");
+    expect(md.match(/^type:/gm)).toHaveLength(1);
+    const again = parseRulesMd(md);
+    expect(again.rules).toEqual(rules);
+    expect(serializeRulesMd(again.rules)).toBe(md);
+  });
+
+  it("survives mergeRules (md rule wins with its type)", () => {
+    const merged = mergeRules([mk({ id: "x", type: "style" })], [mk({ id: "x", type: "security" })]);
+    expect(merged[0]!.type).toBe("security");
   });
 });

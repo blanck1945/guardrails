@@ -119,7 +119,7 @@ describe("prompts", () => {
   it("single and agent prompts list active rules with id, severity, scope, source and body", () => {
     const budget = { maxSteps: 5 } as Parameters<typeof buildAgentInstructions>[1];
     for (const p of [buildSystemPrompt(config), buildAgentInstructions(config, budget)]) {
-      expect(p).toContain("[english-only] (high; scope: src/**; source: CLAUDE.md)");
+      expect(p).toContain("[english-only] (high; type: style; scope: src/**; source: CLAUDE.md)");
       expect(p).toContain("Write English.");
       expect(p).toContain("const a = 1;");
       expect(p).not.toContain("hidden-rule");
@@ -211,5 +211,40 @@ describe("reviewDiff comment-type filter vs rules", () => {
     const r = await run([f("weak", "style", { ruleId: "english-only", confidence: 0.1 })]);
     expect(r.findings).toEqual([]);
     expect(r.dropped.map((d) => d.reason)).toEqual(["low-confidence"]);
+  });
+});
+
+describe("reviewDiff forces the rule's type on findings that cite it", () => {
+  const run = async (rules: Rule[], findings: object[]) => {
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => ({
+        content: [{ type: "text", text: JSON.stringify({ summary: "s", findings }) }],
+        finishReason: { unified: "stop", raw: undefined },
+        usage: {
+          inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+          outputTokens: { total: 1, text: 1, reasoning: 0 },
+        },
+        warnings: [],
+      }),
+    });
+    return reviewDiff({ diff: "+x", context: {}, docs: {} }, { config: { ...defaultConfig, rules }, model });
+  };
+  const f = (type: string, ruleId?: string, line = 1) => ({
+    file: "src/a.ts", line, type, severity: "high", confidence: 0.95, title: `t${line}`, body: "b", ...(ruleId ? { ruleId } : {}),
+  });
+
+  it("overrides the model's type with the rule's type", async () => {
+    const r = await run([mk({ id: "layered", type: "logic" })], [f("security", "layered")]);
+    expect(r.findings.map((x) => x.type)).toEqual(["logic"]);
+  });
+
+  it("uses style when the rule has no type", async () => {
+    const r = await run([mk({ id: "layered" })], [f("security", "layered")]);
+    expect(r.findings.map((x) => x.type)).toEqual(["style"]);
+  });
+
+  it("leaves findings without a rule (or with a suggested one) as the model typed them", async () => {
+    const r = await run([mk({ id: "sugg", status: "suggested", type: "style" })], [f("logic", undefined, 1), f("logic", "sugg", 2)]);
+    expect(r.findings.map((x) => x.type)).toEqual(["logic", "logic"]);
   });
 });

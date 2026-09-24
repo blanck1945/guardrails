@@ -32,6 +32,7 @@ export const candidateSchema = z.object({
   rule: z.string().describe("The rule as ONE or TWO short imperative sentences (max ~250 characters), in English"),
   scope: z.array(z.string()).describe("Glob patterns relative to the repo root; use ['**'] only if it truly applies everywhere"),
   severity: z.enum(["low", "medium", "high"]),
+  type: z.enum(["logic", "security", "syntax", "style"]).optional().describe("Finding type when the rule is violated; omit for style"),
   source: z.string().describe("Repo-relative path of the file the rule comes from"),
   confidence: z.number().min(0).max(1),
   kind: z.enum(candidateKinds),
@@ -41,7 +42,7 @@ export const synthesisSchema = z.object({ rules: z.array(candidateSchema) });
 
 const SYNTHESIS_EXAMPLE = {
   rules: [
-    { id: "kebab-case-id", rule: "Imperative sentence.", scope: ["src/**"], severity: "medium", source: "CLAUDE.md", confidence: 0.9, kind: "diff-checkable" },
+    { id: "kebab-case-id", rule: "Imperative sentence.", scope: ["src/**"], severity: "medium", type: "style", source: "CLAUDE.md", confidence: 0.9, kind: "diff-checkable" },
   ],
 };
 
@@ -56,6 +57,7 @@ export const synthesisInstructions = (maxRules: number): string => [
   "Copy every file path and file name LITERALLY, including its full extension, from the folder structure and file headers provided (write `seeds.config.json`, never `seeds.config.`). Never abbreviate or guess a path: if you are unsure a file exists, leave it out of `scope`.",
   "`scope` is a list of globs relative to the repo root, as narrow as the source allows (for example `src/**/*.tsx` for React rules). Use ['**'] only for rules that apply everywhere.",
   "`severity`: high = breaks the product, security or explicit hard prohibitions ('never', 'must not'); medium = normal conventions; low = style or preference.",
+  "`type`: the kind of finding a violation is. 'style' = conventions, architecture and layering, naming, file structure, comments, language, tests-next-to-code; 'security' = real security problems (secrets, injection, auth, unsafe data handling); 'logic' = wrong behavior or business-logic rules (deadlines, calculations, invariants); 'syntax' = language-level or tooling correctness. When in doubt use 'style'.",
   "`confidence` in [0,1]: 0.9+ for explicit statements, 0.6-0.8 for clear implications, below 0.5 for guesses.",
   "`kind`: 'diff-checkable' = a reviewer can verify it by reading a diff; 'context-only' = useful background that is hard to verify from a diff (architecture notes, process); 'tool-enforced' = a linter, type checker or CI job that the repo actually runs already enforces it (for example a compiler flag or lint rule that CI executes). If a lint or compiler setting exists but nothing shows CI or a hook runs it, use 'diff-checkable' with lower confidence instead.",
   "Keep each `rule` to one or two short sentences (about 250 characters at most): state the requirement and, if essential, one reason. No long examples.",
@@ -99,6 +101,7 @@ export function normalizeCandidates(raw: readonly CandidateRule[]): CandidateRul
       rule,
       scope: scope.length ? scope : ["**"],
       severity: c.severity,
+      type: c.type ?? "style",
       source: c.source.trim() || "unknown",
       confidence: Math.min(1, Math.max(0, c.confidence)),
       kind: c.kind,

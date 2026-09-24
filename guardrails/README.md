@@ -32,7 +32,7 @@ Only `active` rules whose `scope` matches a changed file are sent to the model.
 
 ## Configuration
 
-`.guardrails/rules.md` holds the rules (one `## <id>` block each, with `scope`, `severity`, `source`, `status`).
+`.guardrails/rules.md` holds the rules (one `## <id>` block each, with `scope`, `severity`, `type`, `source`, `status`). `type` (`logic|security|syntax|style`, default `style`) is the type of the finding when the rule is violated: the rule decides it, not the model.
 `.guardrails/config.json` holds `strictness`, `commentTypes`, `ignorePatterns`, `triggers` and so on.
 See `PLAN-DETAILED.md` section 6.4 (in the repository root) for the format.
 

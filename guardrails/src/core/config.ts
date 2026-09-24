@@ -7,6 +7,11 @@ export const ruleSchema = z.object({
   rule: z.string(),
   scope: z.array(z.string()).default(["**"]),
   severity: z.enum(["low", "medium", "high"]).default("medium"),
+  /**
+   * Finding type reported when this rule is violated. The rule decides it, not the model (default `style`, see `ruleType`).
+   * Conventions, architecture, naming and structure are `style`; real vulnerabilities `security`; wrong behavior `logic`.
+   */
+  type: z.enum(["logic", "security", "syntax", "style"]).optional(),
   /** Where the rule came from: a file path (e.g. "CLAUDE.md") or "user". */
   source: z.string().optional(),
   /** Only `active` rules are applied to reviews; `suggested` awaits user approval. */

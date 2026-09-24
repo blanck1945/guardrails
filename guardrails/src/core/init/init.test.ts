@@ -199,6 +199,14 @@ describe("synthesizeRules", () => {
     expect(r.candidates).toEqual([]);
   });
 
+  it("candidates default to type style and mergeSuggestions writes the type", () => {
+    const [n] = normalizeCandidates([cand({ id: "a" }), cand({ id: "sec", type: "security" })]);
+    expect(n!.type).toBe("style");
+    const { added, text } = mergeSuggestions(null, [cand({ id: "sec", type: "security" }), cand({ id: "plain" })]);
+    expect(added.map((r) => r.type)).toEqual(["security", "style"]);
+    expect(parseRulesMd(text).rules.map((r) => r.type)).toEqual(["security", "style"]);
+  });
+
   it("normalizeCandidates dedupes ids and drops empty rules", () => {
     const out = normalizeCandidates([cand({ id: "a" }), cand({ id: "a" }), cand({ id: "b", rule: "  " }), cand({ id: "c", confidence: 3 })]);
     expect(out.map((c) => c.id)).toEqual(["c", "a", "a-2"]); // highest confidence first

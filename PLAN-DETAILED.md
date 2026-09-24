@@ -369,6 +369,7 @@ Gate de cada pack: fixtures ≥90% correctos y ≤0.2 comentarios inválidos del
 ## english-only                <- id kebab-case, único
 scope: src/**, docs/**        <- globs separados por coma (llaves `{a,b}` OK); default `**`
 severity: high                <- low | medium (default) | high
+type: style                   <- logic | security | syntax | style; tipo del finding al violarse la regla (default style)
 source: CLAUDE.md             <- archivo de origen o `user`
 status: active                <- active (default) | suggested | disabled
 
@@ -383,6 +384,7 @@ Todo el código, comentarios y prompts en inglés. Cuerpo en lenguaje natural, c
 **Review por PR:** `.guardrails/config.json` y `rules.md` se leen del commit **base** (`pr.base.sha`), no del head (un PR no puede debilitar su propio review; si no existen en base, defaults). Solo entran al prompt las reglas cuyo `scope` matchea algún archivo modificado (picomatch; un glob sin `/` matchea por basename). Los prompts (single y agent) listan id, severidad, scope, source y cuerpo. Un finding con `ruleId` que no está entre las reglas entregadas se descarta. El comentario cita `Rule \`id\` (source)`. Si el PR toca `rules.md` o `config.json`, el resumen lo indica (informativo).
 
 **Decisiones:**
+- **`type` de la regla (B40c):** convenciones/arquitectura/naming/estructura → `style`; vulnerabilidades reales → `security`; comportamiento o reglas de negocio → `logic`; corrección de lenguaje/herramientas → `syntax`. Es opcional en `rules.md`/config (sin `type` = `style` al aplicarla; `parse`/`serialize` solo lo escriben si está y el round-trip es estable); `init` lo genera (default `style`). Cuando un hallazgo cita una regla `active`, el core fuerza `finding.type = rule.type`: el tipo lo decide la regla, no el modelo. El prompt lista `type` por regla.
 - `source`/`status` viven en `ruleSchema` del config, así config.json y rules.md comparten tipo.
 - `init` nunca reescribe rules.md: solo agrega bloques al final (respeta reglas del usuario, comentarios y hasta bloques inválidos). Se saltean ids ya presentes en rules.md, en config, en `disabledRules`, y reglas con texto idéntico; `source: user` está reservado (las generadas usan `inferred` si el modelo lo pusiera).
 - Lo que el linter/tsc ya hace cumplir se marca `tool-enforced` **solo si algo (CI/hook) lo ejecuta**; si hay config pero nada lo corre, queda `diff-checkable` con menos confianza. Así una regla de `.oxlintrc.json` que CI no ejecuta sí se sugiere.

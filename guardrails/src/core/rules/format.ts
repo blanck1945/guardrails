@@ -1,4 +1,5 @@
 import type { Rule } from "../config";
+import { ruleType } from "./merge";
 
 /**
  * Renders rules for the review prompts (single and agent). Only `active` rules are listed.
@@ -8,7 +9,7 @@ export function formatRulesForPrompt(rules: readonly Rule[]): string {
   return rules
     .filter((r) => r.status === "active")
     .map((r) => {
-      const meta = [r.severity, `scope: ${r.scope.join(", ")}`, r.source && `source: ${r.source}`].filter(Boolean);
+      const meta = [r.severity, `type: ${ruleType(r)}`, `scope: ${r.scope.join(", ")}`, r.source && `source: ${r.source}`].filter(Boolean);
       const body = r.rule
         .trim()
         .split("\n")

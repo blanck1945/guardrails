@@ -7,6 +7,7 @@ import { emptyUsage, sumUsage, type UsageTotals } from "./agent/budget";
 import type { GuardrailsConfig } from "./config";
 import { capFindings, capFor, collapseByLocation } from "./findings/limits";
 import { verifyAbsenceClaims } from "./findings/verify";
+import { ruleType } from "./rules/merge";
 import { stripUnknownRuleIds } from "./rules/select";
 import { buildSystemPrompt, buildUserPrompt } from "./prompt";
 import { reviewResultSchema, type Finding, type ReviewInput } from "./types";
@@ -77,9 +78,12 @@ export async function reviewDiff(
   const filterFindings = (fs: Finding[]) => {
     const dropped: ReviewOutput["dropped"] = [];
     const kept: Finding[] = [];
-    const activeIds = new Set(config.rules.filter((r) => r.status === "active").map((r) => r.id));
-    for (const f of stripUnknownRuleIds(fs, config.rules)) {
-      const citesActiveRule = !!f.ruleId && activeIds.has(f.ruleId);
+    const activeById = new Map(config.rules.filter((r) => r.status === "active").map((r) => [r.id, r]));
+    for (const raw of stripUnknownRuleIds(fs, config.rules)) {
+      const rule = raw.ruleId ? activeById.get(raw.ruleId) : undefined;
+      const citesActiveRule = !!rule;
+      // The rule decides the type of its own findings, not the model.
+      const f = rule ? { ...raw, type: ruleType(rule) } : raw;
       if (f.confidence < min) dropped.push({ finding: f, reason: "low-confidence" });
       else if (!citesActiveRule && !config.commentTypes.includes(f.type)) dropped.push({ finding: f, reason: "comment-type-disabled" });
       else kept.push(f);

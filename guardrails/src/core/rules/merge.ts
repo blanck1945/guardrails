@@ -21,3 +21,10 @@ export function mergeRules(
 export function activeRules(rules: readonly Rule[]): Rule[] {
   return rules.filter((r) => r.status === "active");
 }
+
+export type FindingType = NonNullable<Rule["type"]>;
+
+/** The finding type a rule imposes: the rule's own `type`, `style` when it has none. */
+export function ruleType(rule: Pick<Rule, "type">): FindingType {
+  return rule.type ?? "style";
+}

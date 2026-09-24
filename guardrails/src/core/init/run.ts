@@ -103,7 +103,7 @@ export function formatInitReport(r: InitResult, opts: { write: boolean; rulesPat
 
   L.push("", `Suggested rules (${r.merge.added.length}):`);
   for (const a of r.merge.added) {
-    L.push(`  + ${a.id} [${a.severity}] scope: ${a.scope.join(", ")} (source: ${a.source})`, `      ${a.rule.split("\n")[0]}`);
+    L.push(`  + ${a.id} [${a.severity}/${a.type ?? "style"}] scope: ${a.scope.join(", ")} (source: ${a.source})`, `      ${a.rule.split("\n")[0]}`);
   }
   if (!r.merge.added.length) L.push("  (none)");
   if (r.scopeWarnings.length) {

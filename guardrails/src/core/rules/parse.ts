@@ -19,9 +19,10 @@ export interface ParsedRulesMd {
 }
 
 const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const HEADER_LINE = /^(scope|severity|source|status)\s*:\s*(.*)$/i;
+const HEADER_LINE = /^(scope|severity|source|status|type)\s*:\s*(.*)$/i;
 const FENCE = /^\s{0,3}(```+|~~~+)/;
 const SEVERITIES = ["low", "medium", "high"] as const;
+const TYPES = ["logic", "security", "syntax", "style"] as const;
 const STATUSES = ["active", "suggested", "disabled"] as const;
 
 /** Splits on commas that are not inside `{...}` (so `*.{ts,tsx}` stays whole). */
@@ -46,7 +47,7 @@ export function splitGlobs(value: string): string[] {
  * (with its line number) and skipped; the others are kept.
  *
  * Format: one block per rule, `## <kebab-id>`, then optional `key: value` lines
- * (scope, severity, source, status), a blank line, then the free-form natural-language body.
+ * (scope, severity, type, source, status), a blank line, then the free-form natural-language body.
  * `## ` lines inside fenced code blocks are part of the body.
  */
 export function parseRulesMd(text: string): ParsedRulesMd {
@@ -113,11 +114,18 @@ export function parseRulesMd(text: string): ParsedRulesMd {
       if ((STATUSES as readonly string[]).includes(v)) status = v as RuleStatus;
       else bad(`invalid status "${meta.status.value}" (expected active, suggested or disabled)`, meta.status.line);
     }
+    let type: Rule["type"];
+    if (meta.type) {
+      const v = meta.type.value.toLowerCase();
+      if ((TYPES as readonly string[]).includes(v)) type = v as NonNullable<Rule["type"]>;
+      else bad(`invalid type "${meta.type.value}" (expected logic, security, syntax or style)`, meta.type.line);
+    }
     if (!body) bad("rule has no body text", b.line);
     if (!ok) continue;
 
     const scope = meta.scope ? splitGlobs(meta.scope.value) : [];
     const rule: Rule = { id, rule: body, scope: scope.length ? scope : ["**"], severity, status };
+    if (type) rule.type = type;
     if (meta.source?.value) rule.source = meta.source.value;
     seen.add(id);
     rules.push(rule);
@@ -133,6 +141,7 @@ export function parseRulesMd(text: string): ParsedRulesMd {
 export function serializeRulesMd(rules: readonly Rule[], opts: { preamble?: string } = {}): string {
   const blocks = rules.map((r) => {
     const head = [`## ${r.id}`, `scope: ${(r.scope.length ? r.scope : ["**"]).join(", ")}`, `severity: ${r.severity}`];
+    if (r.type) head.push(`type: ${r.type}`);
     if (r.source) head.push(`source: ${r.source}`);
     head.push(`status: ${r.status}`);
     return `${head.join("\n")}\n\n${r.rule.trim()}`;
