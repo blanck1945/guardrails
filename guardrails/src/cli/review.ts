@@ -27,6 +27,7 @@ export const REVIEW_USAGE =
 const RULES_PATH = ".guardrails/rules.md";
 const CONFIG_PATH = ".guardrails/config.json";
 const MAX_DIFF_CHARS = 200_000;
+const REVIEW_TIMEOUT_MS = 300_000;
 const SEVERITIES = ["low", "medium", "high"] as const;
 type Severity = (typeof SEVERITIES)[number];
 export type FailOn = Severity | "none";
@@ -290,6 +291,8 @@ async function runReviewInner(opts: ReviewCliOptions, io: CliIO): Promise<number
     mode: opts.mode,
     workspace: opts.mode === "agent" ? workspace : undefined,
     costTracker: tracker,
+    // A hung provider must not hang the terminal (or a git push): give up after 5 minutes.
+    abortSignal: AbortSignal.timeout(REVIEW_TIMEOUT_MS),
   });
 
   if (out.incomplete) {
