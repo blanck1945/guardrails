@@ -20,7 +20,7 @@ export function createWorkspaceTools(ws: Workspace) {
   return {
     read_file: tool({
       description:
-        "Read a file with numbered lines (max 300 lines per call). Use ref 'base' for the pre-PR version.",
+        "Read a file with numbered lines (max 300 lines per call). Use ref 'base' for the pre-PR version. A \"file not found\" error is evidence that the file is absent; a file you did not open is NOT evidence of anything.",
       inputSchema: z.object({
         path: z.string(),
         startLine: z.number().int().min(1).optional(),
@@ -30,7 +30,7 @@ export function createWorkspaceTools(ws: Workspace) {
       execute: (input) => guarded(() => ws.readFile(input)),
     }),
     grep: tool({
-      description: "Search the repository with a regex (git grep). Returns path:line:text, max 60 matches.",
+      description: "Search the repository with a regex (git grep). Returns path:line:text, max 60 matches. Use it before claiming that something is never used, read, restored or defined.",
       inputSchema: z.object({
         pattern: z.string(),
         pathGlob: z.string().optional(),
@@ -40,13 +40,13 @@ export function createWorkspaceTools(ws: Workspace) {
       execute: (input) => guarded(() => ws.grep(input)),
     }),
     list_files: tool({
-      description: "List tracked files, optionally filtered by a glob (max 300).",
+      description: "List tracked files, optionally filtered by a glob (max 300). REQUIRED before you claim that a file or test does not exist (for example list_files with glob 'src/components/Foo.test.*'); never state that a file is missing without checking here.",
       inputSchema: z.object({ glob: z.string().optional() }),
       execute: (input) => guarded(() => ws.listFiles(input)),
     }),
     find_references: tool({
       description:
-        "Find usages of a symbol by identifier name (no type resolution; results may include unrelated homonyms).",
+        "Find usages of a symbol by identifier name (no type resolution; results may include unrelated homonyms). Use it (or grep) before claiming that a symbol is unused, undefined or never called.",
       inputSchema: z.object({ symbol: z.string(), path: z.string().optional() }),
       execute: (input) => guarded(() => ws.findReferencesByName(input)),
     }),

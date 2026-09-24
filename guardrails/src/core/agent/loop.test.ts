@@ -191,3 +191,14 @@ describe("reviewDiff modes", () => {
     expect(model.doGenerateCalls[0]!.responseFormat?.type).toBe("json");
   });
 });
+
+describe("reviewDiff absence-claim verification", () => {
+  it("drops a finding that says a file is missing when the head tree has it", async () => {
+    const claim = { ...validFinding, title: "Missing test", body: "no foo.test.ts exists next to it" };
+    const wsFiles = { ...ws, listFiles: async () => ({ files: [validFinding.file.replace(/[^/]*$/, "") + "foo.test.ts"], truncated: false }) } as unknown as typeof ws;
+    const model = scripted(() => call("report_findings", { findings: [claim] }, "r"));
+    const r = await reviewDiff(input, { config: defaultConfig, model, mode: "agent", workspace: wsFiles });
+    expect(r.findings).toHaveLength(0);
+    expect(r.dropped.map((d) => d.reason)).toEqual(["contradicted-by-repo"]);
+  });
+});

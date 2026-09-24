@@ -289,7 +289,8 @@ async function runReviewInner(opts: ReviewCliOptions, io: CliIO): Promise<number
     config: reviewConfig,
     model: modelSpec,
     mode: opts.mode,
-    workspace: opts.mode === "agent" ? workspace : undefined,
+    // Single mode does not use tools, but the workspace still grounds absence claims after the call.
+    workspace,
     costTracker: tracker,
     // A hung provider must not hang the terminal (or a git push): give up after 5 minutes.
     abortSignal: AbortSignal.timeout(REVIEW_TIMEOUT_MS),

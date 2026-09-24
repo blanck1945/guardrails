@@ -49,6 +49,11 @@ export type ListFilesInput = {
   glob?: string;
   /** Max files returned. Defaults to `WORKSPACE_LIMITS.listMaxFiles`; internal callers (init) may raise it. */
   limit?: number;
+  /**
+   * Which tree to list. Omitted = tracked files of the checkout (`git ls-files`). `head`/`base` list the tree of that
+   * revision (`git ls-tree`), independent of what is checked out; needs the matching ref to be configured.
+   */
+  ref?: Ref;
 };
 export type ListFilesResult = { files: string[]; truncated: boolean };
 

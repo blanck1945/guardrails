@@ -5,6 +5,7 @@ import { estimateCostUsd } from "./pricing";
 import { runReviewAgent } from "./agent/loop";
 import { emptyUsage, sumUsage, type UsageTotals } from "./agent/budget";
 import type { GuardrailsConfig } from "./config";
+import { verifyAbsenceClaims } from "./findings/verify";
 import { stripUnknownRuleIds } from "./rules/select";
 import { buildSystemPrompt, buildUserPrompt } from "./prompt";
 import { reviewResultSchema, type Finding, type ReviewInput } from "./types";
@@ -45,7 +46,7 @@ export interface ReviewOutput {
   incomplete?: boolean;
   notes?: string | undefined;
   /** Findings the model reported but that were filtered out, with the reason. */
-  dropped: { finding: Finding; reason: "low-confidence" | "comment-type-disabled" }[];
+  dropped: { finding: Finding; reason: "low-confidence" | "comment-type-disabled" | "contradicted-by-repo" }[];
 }
 
 /**
@@ -85,10 +86,18 @@ export async function reviewDiff(
     return { findings: kept, dropped };
   };
 
+  // Deterministic grounding: drop findings that claim a file is absent when the head tree has it.
+  const verify = async (fs: Finding[]) => {
+    const { findings, dropped } = filterFindings(fs);
+    if (!workspace) return { findings, dropped };
+    const v = await verifyAbsenceClaims(findings, workspace);
+    return { findings: v.kept, dropped: [...dropped, ...v.contradicted.map((c) => ({ finding: c.finding, reason: "contradicted-by-repo" as const }))] };
+  };
+
   if (mode === "agent") {
     if (!workspace) throw new Error("reviewDiff: mode 'agent' requires a workspace");
     const run = await runReviewAgent({ model, config, workspace, input, abortSignal, costTracker });
-    const { findings, dropped } = filterFindings(run.findings);
+    const { findings, dropped } = await verify(run.findings);
     return {
       summary: run.notes ?? "",
       findings,
@@ -112,7 +121,7 @@ ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
   });
 
   const usage = result.steps.length ? sumUsage(result.steps.map((s) => s.usage)) : emptyUsage();
-  const { findings, dropped } = filterFindings(result.output.findings);
+  const { findings, dropped } = await verify(result.output.findings);
   return {
     summary: result.output.summary,
     findings,

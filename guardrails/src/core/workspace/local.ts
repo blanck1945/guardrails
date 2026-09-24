@@ -174,8 +174,13 @@ export class LocalWorkspace implements Workspace {
   }
 
   async listFiles(input: ListFilesInput = {}): Promise<ListFilesResult> {
-    const r = await git(this.root, ["ls-files", "-z"]);
-    if (r.code !== 0) throw new WorkspaceError("git ls-files failed");
+    let rev: string | undefined;
+    if (input.ref === "base") {
+      if (!this.baseRef) throw new WorkspaceError("no baseRef configured");
+      rev = this.baseRef;
+    } else if (input.ref === "head") rev = this.headRef;
+    const r = await git(this.root, rev ? ["ls-tree", "-r", "-z", "--name-only", rev] : ["ls-files", "-z"]);
+    if (r.code !== 0) throw new WorkspaceError(rev ? `git ls-tree failed for ${rev}` : "git ls-files failed");
     let files = r.stdout.split("\0").filter(Boolean);
     if (input.glob) {
       const isMatch = picomatch(normalizeRepoPath(input.glob), { dot: true });
