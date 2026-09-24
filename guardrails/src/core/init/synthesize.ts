@@ -1,7 +1,9 @@
 import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import { emptyUsage, sumUsage, type UsageTotals } from "../agent/budget";
-import { defaultModelSpec, resolveModel } from "../models";
+import { costSince, type CostTracker } from "../cost";
+import { defaultModelSpec, modelSpecOf, resolveModel } from "../models";
+import { estimateCostUsd } from "../pricing";
 import type { RepoContext } from "./collect";
 
 export const MAX_CANDIDATES = 30;
@@ -81,28 +83,34 @@ export function normalizeCandidates(raw: readonly CandidateRule[]): CandidateRul
 export interface SynthesizeOptions {
   model?: LanguageModel;
   abortSignal?: AbortSignal;
+  costTracker?: CostTracker | undefined;
 }
 
 export interface SynthesisResult {
   candidates: CandidateRule[];
   usage: UsageTotals;
+  /** Estimated USD; `null` when the model has no known price, 0 when no call was made. */
+  costUsd: number | null;
 }
 
 /** One structured-output call over the collected context. No tools: the model only sees what the collector read. */
 export async function synthesizeRules(
   context: RepoContext,
-  { model = defaultModelSpec(), abortSignal }: SynthesizeOptions = {},
+  { model = defaultModelSpec(), abortSignal, costTracker }: SynthesizeOptions = {},
 ): Promise<SynthesisResult> {
-  if (!context.files.length) return { candidates: [], usage: emptyUsage() };
+  if (!context.files.length) return { candidates: [], usage: emptyUsage(), costUsd: 0 };
+  const before = costTracker?.snapshot();
   const result = await generateText({
-    model: resolveModel(model),
+    model: resolveModel(model, { tracker: costTracker }),
     output: Output.object({ schema: synthesisSchema }),
     instructions: SYNTHESIS_INSTRUCTIONS,
     prompt: buildSynthesisPrompt(context),
     abortSignal,
   });
+  const usage = result.steps.length ? sumUsage(result.steps.map((s) => s.usage)) : emptyUsage();
   return {
     candidates: normalizeCandidates(result.output.rules),
-    usage: result.steps.length ? sumUsage(result.steps.map((s) => s.usage)) : emptyUsage(),
+    usage,
+    costUsd: costTracker && before ? costSince(costTracker, before) : estimateCostUsd(modelSpecOf(model), usage),
   };
 }

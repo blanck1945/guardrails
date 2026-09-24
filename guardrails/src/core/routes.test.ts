@@ -33,7 +33,7 @@ describe("every model call site goes through resolveModel", () => {
       }),
     });
     await reviewDiff(input, { config: defaultConfig, model });
-    expect(spy).toHaveBeenCalledWith(model);
+    expect(spy.mock.calls[0]?.[0]).toBe(model);
   });
 
   it("reviewDiff (agent) -> runReviewAgent", async () => {
@@ -54,7 +54,7 @@ describe("every model call site goes through resolveModel", () => {
       }),
     });
     await reviewDiff(input, { config: defaultConfig, model, mode: "agent", workspace: ws });
-    expect(spy).toHaveBeenCalledWith(model);
+    expect(spy.mock.calls[0]?.[0]).toBe(model);
   });
 
   it("synthesizeRules", async () => {
@@ -69,7 +69,7 @@ describe("every model call site goes through resolveModel", () => {
     });
     const ctx = { files: [{ path: "CLAUDE.md", kind: "doc", content: "x", truncated: false }], structure: "", skipped: [], totalChars: 1 };
     await synthesizeRules(ctx as never, { model });
-    expect(spy).toHaveBeenCalledWith(model);
+    expect(spy.mock.calls[0]?.[0]).toBe(model);
   });
 
   it("a spec string from GUARDRAILS_MODEL reaches the resolver (missing key -> clear error)", async () => {

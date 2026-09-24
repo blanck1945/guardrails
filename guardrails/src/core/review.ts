@@ -1,5 +1,7 @@
 import { generateText, Output, type LanguageModel } from "ai";
-import { defaultModelSpec, resolveModel } from "./models";
+import { costSince, type CostTracker } from "./cost";
+import { defaultModelSpec, modelSpecOf, resolveModel } from "./models";
+import { estimateCostUsd } from "./pricing";
 import { runReviewAgent } from "./agent/loop";
 import { emptyUsage, sumUsage, type UsageTotals } from "./agent/budget";
 import type { GuardrailsConfig } from "./config";
@@ -20,6 +22,8 @@ export interface ReviewOptions {
   mode?: ReviewMode;
   workspace?: Workspace;
   abortSignal?: AbortSignal;
+  /** Counts spend and stops the run (`BudgetExceededError`) when its cap is reached. */
+  costTracker?: CostTracker;
 }
 
 export interface ReviewOutput {
@@ -28,6 +32,8 @@ export interface ReviewOutput {
   findings: Finding[];
   mode: ReviewMode;
   usage: UsageTotals;
+  /** Estimated USD for this review; `null` when the model has no known price. */
+  costUsd: number | null;
   /** Agent mode only: the model never produced a valid report. */
   incomplete?: boolean;
   notes?: string | undefined;
@@ -45,8 +51,12 @@ export async function reviewDiff(
     mode = "single",
     workspace,
     abortSignal,
+    costTracker,
   }: ReviewOptions,
 ): Promise<ReviewOutput> {
+  const before = costTracker?.snapshot();
+  const costOf = (usage: UsageTotals): number | null =>
+    costTracker && before ? costSince(costTracker, before) : estimateCostUsd(modelSpecOf(model), usage);
   const min = MIN_CONFIDENCE[config.strictness as 1 | 2 | 3];
   const keepBasic = (f: Finding) => f.confidence >= min && config.commentTypes.includes(f.type);
   // A finding may only cite a rule that was given to the model (active rules in `config.rules`).
@@ -54,29 +64,32 @@ export async function reviewDiff(
 
   if (mode === "agent") {
     if (!workspace) throw new Error("reviewDiff: mode 'agent' requires a workspace");
-    const run = await runReviewAgent({ model, config, workspace, input, abortSignal });
+    const run = await runReviewAgent({ model, config, workspace, input, abortSignal, costTracker });
     return {
       summary: run.notes ?? "",
       findings: filterFindings(run.findings),
       mode,
       usage: run.usage,
+      costUsd: costOf(run.usage),
       incomplete: run.incomplete,
       notes: run.notes,
     };
   }
 
   const result = await generateText({
-    model: resolveModel(model),
+    model: resolveModel(model, { tracker: costTracker }),
     output: Output.object({ schema: reviewResultSchema }),
     instructions: buildSystemPrompt(config),
     prompt: buildUserPrompt(input),
     abortSignal,
   });
 
+  const usage = result.steps.length ? sumUsage(result.steps.map((s) => s.usage)) : emptyUsage();
   return {
     summary: result.output.summary,
     findings: filterFindings(result.output.findings),
     mode,
-    usage: result.steps.length ? sumUsage(result.steps.map((s) => s.usage)) : emptyUsage(),
+    usage,
+    costUsd: costOf(usage),
   };
 }

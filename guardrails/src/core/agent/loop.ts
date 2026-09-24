@@ -1,5 +1,6 @@
 import { generateText, isStepCount, type LanguageModel, type StepResult, type ToolSet } from "ai";
 import type { GuardrailsConfig } from "../config";
+import type { CostTracker } from "../cost";
 import { resolveModel } from "../models";
 import { findingSchemaV2, type FindingV2 } from "../findings";
 import type { ReviewInput } from "../types";
@@ -22,6 +23,7 @@ export interface AgentRunOptions {
   input: ReviewInput;
   budget?: Partial<AgentBudget>;
   abortSignal?: AbortSignal;
+  costTracker?: CostTracker | undefined;
 }
 
 export interface AgentRunResult {
@@ -76,7 +78,7 @@ export async function runReviewAgent(opts: AgentRunOptions): Promise<AgentRunRes
   const accumulatedInput = (steps: readonly AnyStep[]) => sumUsage(steps.map((s) => s.usage)).inputTokens;
 
   const result = await generateText({
-    model: resolveModel(opts.model),
+    model: resolveModel(opts.model, { tracker: opts.costTracker }),
     instructions: buildAgentInstructions(opts.config, budget),
     prompt: buildAgentPrompt(opts.input, diff),
     tools,

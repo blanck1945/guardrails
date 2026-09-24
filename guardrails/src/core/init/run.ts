@@ -1,5 +1,6 @@
 import type { LanguageModel } from "ai";
 import type { UsageTotals } from "../agent/budget";
+import type { CostTracker } from "../cost";
 import { safeParseConfig } from "../config";
 import type { Workspace } from "../workspace";
 import { collectRepoContext, type RepoContext } from "./collect";
@@ -15,6 +16,8 @@ export interface InitOptions extends FilterOptions {
   /** Current `.guardrails/config.json` contents, if any. */
   existingConfigJson?: string | null;
   abortSignal?: AbortSignal;
+  /** Counts spend and stops the run (`BudgetExceededError`) when its cap is reached. */
+  costTracker?: CostTracker;
 }
 
 export interface InitResult {
@@ -23,19 +26,25 @@ export interface InitResult {
   filtered: FilteredCandidates;
   merge: MergeSuggestionsResult;
   usage: UsageTotals;
+  /** Estimated USD for the run; `null` when the model has no known price. */
+  costUsd: number | null;
 }
 
 /** collect -> synthesize -> filter -> merge. Pure with respect to the disk: the caller writes `merge.text`. */
 export async function runInit(opts: InitOptions): Promise<InitResult> {
   const context = await collectRepoContext(opts.workspace);
-  const { candidates, usage } = await synthesizeRules(context, { model: opts.model, abortSignal: opts.abortSignal });
+  const { candidates, usage, costUsd } = await synthesizeRules(context, {
+    model: opts.model,
+    abortSignal: opts.abortSignal,
+    costTracker: opts.costTracker,
+  });
   const filtered = filterCandidates(candidates, opts);
   const config = safeParseConfig(opts.existingConfigJson).config;
   const merge = mergeSuggestions(opts.existingRulesMd, filtered.kept, {
     configRules: config.rules,
     disabledRules: config.disabledRules,
   });
-  return { context, candidates, filtered, merge, usage };
+  return { context, candidates, filtered, merge, usage, costUsd };
 }
 
 export function formatInitReport(r: InitResult, opts: { write: boolean; rulesPath: string }): string {
@@ -59,6 +68,8 @@ export function formatInitReport(r: InitResult, opts: { write: boolean; rulesPat
     L.push("", "Below the confidence threshold (not suggested):");
     for (const c of r.filtered.lowConfidence) L.push(`  - ${c.id} (${c.confidence.toFixed(2)}): ${c.rule.split("\n")[0]}`);
   }
+  L.push("", `Usage: ${r.usage.inputTokens} input (${r.usage.cachedInputTokens} cached) / ${r.usage.outputTokens} output tokens`);
+  L.push(`Cost: ${r.costUsd === null ? "unknown (no known price for this model)" : `~$${r.costUsd.toFixed(4)}`}`);
   L.push(
     "",
     opts.write
