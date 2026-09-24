@@ -61,15 +61,21 @@ export async function reviewDiff(
     costTracker && before ? costSince(costTracker, before) : estimateCostUsd(modelSpecOf(model), usage);
   const min = MIN_CONFIDENCE[config.strictness as 1 | 2 | 3];
   // A finding may only cite a rule that was given to the model (active rules in `config.rules`).
+  // A finding may only cite a rule that was given to the model (active rules in `config.rules`).
+  // A finding that cites such a rule is exempt from the comment-type filter (a team rule about
+  // comment language is a `style` finding, but the team opted into it); the confidence filter still applies.
+  // Findings without a valid rule go through the normal type filter.
   const filterFindings = (fs: Finding[]) => {
     const dropped: ReviewOutput["dropped"] = [];
-    const basic: Finding[] = [];
-    for (const f of fs) {
+    const kept: Finding[] = [];
+    const activeIds = new Set(config.rules.filter((r) => r.status === "active").map((r) => r.id));
+    for (const f of stripUnknownRuleIds(fs, config.rules)) {
+      const citesActiveRule = !!f.ruleId && activeIds.has(f.ruleId);
       if (f.confidence < min) dropped.push({ finding: f, reason: "low-confidence" });
-      else if (!config.commentTypes.includes(f.type)) dropped.push({ finding: f, reason: "comment-type-disabled" });
-      else basic.push(f);
+      else if (!citesActiveRule && !config.commentTypes.includes(f.type)) dropped.push({ finding: f, reason: "comment-type-disabled" });
+      else kept.push(f);
     }
-    return { findings: stripUnknownRuleIds(basic, config.rules), dropped };
+    return { findings: kept, dropped };
   };
 
   if (mode === "agent") {

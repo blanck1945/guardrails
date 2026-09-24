@@ -23,7 +23,7 @@ export function buildAgentInstructions(config: GuardrailsConfig, budget: AgentBu
     `Only report these comment types: ${config.commentTypes.join(", ")}.`,
     "Give a confidence between 0 and 1.",
     config.instructions && `Team instructions:\n${config.instructions}`,
-    rules && `Team rules. Report a violation with its ruleId, and cite the rule id and its source in the finding body:\n${rules}`,
+    rules && `Team rules. Whenever a finding violates one of the rules listed below, you MUST set its ruleId field to that rule's id (exactly as listed) and cite the id and its source in the finding body. Rule violations are reported even if their type is not in the list above:\n${rules}`,
   ]
     .filter(Boolean)
     .join("\n\n");

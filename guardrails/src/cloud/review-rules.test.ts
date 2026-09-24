@@ -166,3 +166,50 @@ describe("reviewDiff strips unknown rule ids", () => {
     expect(r.findings.map((f) => f.ruleId)).toEqual([undefined, "english-only", undefined]);
   });
 });
+
+describe("reviewDiff comment-type filter vs rules", () => {
+  const f = (title: string, type: string, extra: object = {}) => ({
+    file: "src/a.ts", line: 1, type, severity: "medium", confidence: 0.95, title, body: "b", ...extra,
+  });
+  const run = async (findings: object[]) => {
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => ({
+        content: [{ type: "text", text: JSON.stringify({ summary: "s", findings }) }],
+        finishReason: { unified: "stop", raw: undefined },
+        usage: {
+          inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+          outputTokens: { total: 1, text: 1, reasoning: 0 },
+        },
+        warnings: [],
+      }),
+    });
+    return reviewDiff(
+      { diff: "+x", context: {}, docs: {} },
+      { config: { ...defaultConfig, rules: [mk({ id: "english-only" }), mk({ id: "sugg-rule", status: "suggested" })] }, model },
+    );
+  };
+
+  it("keeps a style finding that cites an active rule", async () => {
+    const r = await run([f("spanish", "style", { ruleId: "english-only" })]);
+    expect(r.findings.map((x) => x.ruleId)).toEqual(["english-only"]);
+    expect(r.dropped).toEqual([]);
+  });
+
+  it("still drops a style finding without a rule, with its reason", async () => {
+    const r = await run([f("nit", "style")]);
+    expect(r.findings).toEqual([]);
+    expect(r.dropped.map((d) => d.reason)).toEqual(["comment-type-disabled"]);
+  });
+
+  it("strips suggested/unknown rule ids and then applies the type filter", async () => {
+    const r = await run([f("a", "style", { ruleId: "sugg-rule" }), f("b", "style", { ruleId: "ghost" }), f("c", "logic", { ruleId: "ghost" })]);
+    expect(r.findings.map((x) => [x.title, x.ruleId])).toEqual([["c", undefined]]);
+    expect(r.dropped.map((d) => d.finding.title)).toEqual(["a", "b"]);
+  });
+
+  it("the confidence filter still applies to rule findings", async () => {
+    const r = await run([f("weak", "style", { ruleId: "english-only", confidence: 0.1 })]);
+    expect(r.findings).toEqual([]);
+    expect(r.dropped.map((d) => d.reason)).toEqual(["low-confidence"]);
+  });
+});
