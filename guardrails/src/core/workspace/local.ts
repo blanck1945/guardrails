@@ -182,7 +182,8 @@ export class LocalWorkspace implements Workspace {
       files = files.filter((f) => isMatch(f));
     }
     files.sort();
-    return { files: files.slice(0, L.listMaxFiles), truncated: files.length > L.listMaxFiles };
+    const limit = Math.min(Math.max(1, Math.floor(input.limit ?? L.listMaxFiles)), 50_000);
+    return { files: files.slice(0, limit), truncated: files.length > limit };
   }
 
   async diff(): Promise<string> {

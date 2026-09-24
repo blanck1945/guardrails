@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "eval": "tsx eval/cli.ts",
+    "guardrails": "tsx src/cli/guardrails.ts",
     "check": "pnpm typecheck && pnpm test"
   },
   "dependencies": {

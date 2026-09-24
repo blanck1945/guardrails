@@ -45,7 +45,11 @@ export type GrepResult = {
   truncated: boolean;
 };
 
-export type ListFilesInput = { glob?: string };
+export type ListFilesInput = {
+  glob?: string;
+  /** Max files returned. Defaults to `WORKSPACE_LIMITS.listMaxFiles`; internal callers (init) may raise it. */
+  limit?: number;
+};
 export type ListFilesResult = { files: string[]; truncated: boolean };
 
 export type ReferencesInput = { symbol: string; path?: string };

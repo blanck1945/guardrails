@@ -1,0 +1,304 @@
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { MockLanguageModelV4 } from "ai/test";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { parseRulesMd, serializeRulesMd } from "../rules";
+import { LocalWorkspace, type ListFilesInput, type ReadFileInput, type Workspace } from "../workspace";
+import { collectRepoContext, INIT_LIMITS } from "./collect";
+import { filterCandidates } from "./filter";
+import { runInit } from "./run";
+import { isSecretPath, redactSecrets } from "./secrets";
+import { normalizeCandidates, synthesizeRules, type CandidateRule } from "./synthesize";
+import { mergeSuggestions } from "./write";
+
+const SECRET_VALUE = "sk-live-SUPERSECRETVALUE1234567890abcdef";
+const CLAUDE_MD = `# Project rules
+- Everything in English: code, comments, commits and docs.
+- Never hardcode domains; read them from config.
+- Never hand-patch generated apps; fix the generator.
+- No product UI in panel/public/.
+- Do not add git URLs to seeds.config.json without verifying them.
+`;
+
+let tmp: string;
+let repo: string;
+let ws: LocalWorkspace;
+
+function git(cwd: string, ...args: string[]) {
+  return execFileSync(
+    "git",
+    ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", ...args],
+    { cwd, encoding: "utf8" },
+  );
+}
+const put = (rel: string, content: string) => {
+  const p = path.join(repo, rel);
+  mkdirSync(path.dirname(p), { recursive: true });
+  writeFileSync(p, content);
+};
+
+beforeAll(() => {
+  tmp = mkdtempSync(path.join(tmpdir(), "init-test-"));
+  repo = path.join(tmp, "repo");
+  mkdirSync(repo);
+  git(repo, "init", "-q");
+  put("CLAUDE.md", CLAUDE_MD);
+  put("README.md", "# Starter\nSee CLAUDE.md.\n");
+  put("docs/lessons.md", "# Lessons\n- Never combine overflow-x: hidden with overflow-y: visible.\n");
+  put(".oxlintrc.json", '{ "rules": { "react-hooks/rules-of-hooks": "error", "consistent-type-imports": "error" } }\n');
+  put("tsconfig.json", '{ "compilerOptions": { "strict": true, "erasableSyntaxOnly": true } }\n');
+  put(".github/workflows/ci.yml", "jobs:\n  ci:\n    steps:\n      - run: pnpm lint\n      - run: pnpm tsc --noEmit\n");
+  put("src/app.ts", "export const x = 1;\n");
+  put("panel/public/index.html", "<html></html>\n");
+  put(".env", `API_KEY=${SECRET_VALUE}\n`);
+  put("config/server.pem", "-----BEGIN PRIVATE KEY-----\nabc\n-----END PRIVATE KEY-----\n");
+  put("dist/CLAUDE.md", "ignored build output\n");
+  put("pnpm-lock.yaml", "lock\n");
+  // `-f` because a .gitignore-less repo tracks everything anyway; .env and .pem are deliberately tracked.
+  git(repo, "add", "-A", "-f");
+  git(repo, "commit", "-q", "-m", "init");
+  ws = new LocalWorkspace({ root: repo });
+});
+
+afterAll(() => rmSync(tmp, { recursive: true, force: true }));
+
+const cand = (over: Partial<CandidateRule> & { id: string }): CandidateRule => ({
+  rule: `Rule text for ${over.id}`,
+  scope: ["**"],
+  severity: "medium",
+  source: "CLAUDE.md",
+  confidence: 0.9,
+  kind: "diff-checkable",
+  ...over,
+});
+
+describe("collectRepoContext", () => {
+  it("finds docs, lint configs and CI, and builds a structure summary", async () => {
+    const ctx = await collectRepoContext(ws);
+    const paths = ctx.files.map((f) => f.path);
+    expect(paths).toEqual(
+      expect.arrayContaining(["CLAUDE.md", "docs/lessons.md", ".oxlintrc.json", "tsconfig.json", ".github/workflows/ci.yml", "README.md"]),
+    );
+    expect(ctx.files.find((f) => f.path === "CLAUDE.md")!.content).toContain("Never hardcode domains");
+    // priority order: instructions before readme
+    expect(paths.indexOf("CLAUDE.md")).toBeLessThan(paths.indexOf("README.md"));
+    expect(ctx.structure).toContain("src/");
+    expect(ctx.structure).toContain("panel/");
+    expect(ctx.totalChars).toBeLessThanOrEqual(INIT_LIMITS.maxTotalChars);
+  });
+
+  it("never reads ignored or secret files and never puts their content in the context", async () => {
+    const ctx = await collectRepoContext(ws);
+    const paths = ctx.files.map((f) => f.path);
+    expect(paths).not.toContain("dist/CLAUDE.md");
+    expect(paths.some((p) => isSecretPath(p))).toBe(false);
+    const blob = JSON.stringify(ctx);
+    expect(blob).not.toContain(SECRET_VALUE);
+    expect(blob).not.toContain("BEGIN PRIVATE KEY");
+    expect(ctx.structure).not.toContain(".env");
+    expect(ctx.structure).not.toContain("server.pem");
+  });
+
+  it("does not read secret files even if the workspace lists them (no-regression)", async () => {
+    const reads: string[] = [];
+    const hostile: Workspace = {
+      ...ws,
+      listFiles: async (i?: ListFilesInput) => ({
+        files: [".env", ".env.production", "config/server.pem", ".ssh/id_rsa", "secrets.json", "CLAUDE.md"],
+        truncated: !!i && false,
+      }),
+      readFile: async (i: ReadFileInput) => {
+        reads.push(i.path);
+        return {
+          path: i.path,
+          ref: "head" as const,
+          startLine: 1,
+          endLine: 1,
+          totalLines: 1,
+          content: i.path === "CLAUDE.md" ? `1\tsafe text with token ${SECRET_VALUE}` : `1\t${SECRET_VALUE}`,
+          truncated: false,
+        };
+      },
+      grep: ws.grep.bind(ws),
+      diff: ws.diff.bind(ws),
+      findReferencesByName: ws.findReferencesByName.bind(ws),
+    };
+    const ctx = await collectRepoContext(hostile);
+    expect(new Set(reads)).toEqual(new Set(["CLAUDE.md"]));
+    expect(JSON.stringify(ctx)).not.toContain(SECRET_VALUE); // redacted even inside allowed files
+    expect(ctx.skipped.map((s) => s.reason)).toContain("secret");
+  });
+
+  it("truncates big files at the per-file cap", async () => {
+    const big = "x".repeat(50) + "\n";
+    put("CONTRIBUTING.md", big.repeat(1000));
+    git(repo, "add", "-A", "-f");
+    git(repo, "commit", "-q", "-m", "big");
+    const ctx = await collectRepoContext(ws);
+    const f = ctx.files.find((x) => x.path === "CONTRIBUTING.md")!;
+    expect(f.truncated).toBe(true);
+    expect(f.content.length).toBeLessThanOrEqual(INIT_LIMITS.maxFileChars);
+  });
+});
+
+describe("secrets helpers", () => {
+  it("detects secret paths and redacts secret-looking strings", () => {
+    for (const p of [".env", ".env.local", "a/b/.env.production", "k.pem", "id_rsa", ".npmrc", ".aws/credentials", "secrets.yaml"]) {
+      expect(isSecretPath(p), p).toBe(true);
+    }
+    for (const p of ["CLAUDE.md", "src/env.ts", "docs/secret-santa.md", "tsconfig.json"]) expect(isSecretPath(p), p).toBe(false);
+    const r = redactSecrets(`token ghp_${"a".repeat(36)} and AWS_SECRET_KEY=abcd1234efgh and ${SECRET_VALUE}`);
+    expect(r).not.toMatch(/ghp_a{36}|abcd1234efgh|SUPERSECRET/);
+  });
+});
+
+describe("synthesizeRules", () => {
+  const usage = {
+    inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
+    outputTokens: { total: 5, text: 5, reasoning: 0 },
+  };
+  const mockModel = (rules: unknown[], onCall?: (prompt: string) => void) =>
+    new MockLanguageModelV4({
+      doGenerate: async (o) => {
+        onCall?.(JSON.stringify(o.prompt));
+        return {
+          content: [{ type: "text", text: JSON.stringify({ rules }) }],
+          finishReason: { unified: "stop", raw: undefined },
+          usage,
+          warnings: [],
+        };
+      },
+    });
+
+  it("returns normalized candidates and sends the collected context (untrusted-wrapped)", async () => {
+    const ctx = await collectRepoContext(ws);
+    let seen = "";
+    const model = mockModel(
+      [
+        { id: "English Only!", rule: "All code in English.", scope: ["/src/**", "../etc"], severity: "high", source: "CLAUDE.md", confidence: 0.95, kind: "diff-checkable" },
+        { id: "strict-ts", rule: "Enable strict.", scope: [], severity: "low", source: "tsconfig.json", confidence: 0.9, kind: "tool-enforced" },
+      ],
+      (p) => (seen = p),
+    );
+    const r = await synthesizeRules(ctx, { model });
+    expect(r.candidates.map((c) => c.id)).toEqual(["english-only", "strict-ts"]);
+    expect(r.candidates[0]!.scope).toEqual(["src/**"]);
+    expect(r.candidates[1]!.scope).toEqual(["**"]);
+    expect(r.usage.inputTokens).toBeGreaterThan(0);
+    expect(seen).toContain("<untrusted>");
+    expect(seen).toContain("Never hardcode domains");
+    expect(seen).not.toContain(SECRET_VALUE);
+  });
+
+  it("skips the model call when nothing was collected", async () => {
+    const r = await synthesizeRules({ files: [], structure: "", skipped: [], totalChars: 0 }, { model: mockModel([]) });
+    expect(r.candidates).toEqual([]);
+  });
+
+  it("normalizeCandidates dedupes ids and drops empty rules", () => {
+    const out = normalizeCandidates([cand({ id: "a" }), cand({ id: "a" }), cand({ id: "b", rule: "  " }), cand({ id: "c", confidence: 3 })]);
+    expect(out.map((c) => c.id)).toEqual(["a", "a-2", "c"]);
+    expect(out[2]!.confidence).toBe(1);
+  });
+});
+
+describe("filterCandidates", () => {
+  const list = [
+    cand({ id: "keep" }),
+    cand({ id: "ctx", kind: "context-only", confidence: 0.7 }),
+    cand({ id: "tool", kind: "tool-enforced" }),
+    cand({ id: "weak", confidence: 0.3 }),
+  ];
+  it("drops tool-enforced and low confidence by default, listing them apart", () => {
+    const f = filterCandidates(list);
+    expect(f.kept.map((c) => c.id)).toEqual(["keep", "ctx"]);
+    expect(f.toolEnforced.map((c) => c.id)).toEqual(["tool"]);
+    expect(f.lowConfidence.map((c) => c.id)).toEqual(["weak"]);
+  });
+  it("threshold and tool-enforced inclusion are configurable", () => {
+    expect(filterCandidates(list, { minConfidence: 0.2 }).kept.map((c) => c.id)).toEqual(["keep", "ctx", "weak"]);
+    expect(filterCandidates(list, { includeToolEnforced: true }).kept.map((c) => c.id)).toContain("tool");
+  });
+});
+
+describe("mergeSuggestions", () => {
+  it("creates a file with suggested rules that parse cleanly", () => {
+    const r = mergeSuggestions(null, [cand({ id: "english-only", source: "CLAUDE.md" })]);
+    const parsed = parseRulesMd(r.text);
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.rules).toHaveLength(1);
+    expect(parsed.rules[0]).toMatchObject({ id: "english-only", status: "suggested", source: "CLAUDE.md" });
+  });
+
+  it("never overwrites user rules: existing text stays byte-for-byte and repeated ids are skipped", () => {
+    const existing = serializeRulesMd(
+      [
+        { id: "english-only", rule: "MY OWN WORDING", scope: ["src/**"], severity: "high", source: "user", status: "active" },
+        { id: "old-off", rule: "was disabled", scope: ["**"], severity: "low", source: "user", status: "disabled" },
+      ],
+      { preamble: "# my notes" },
+    ) + "\n## broken_id\nnot parseable\n";
+    const r = mergeSuggestions(existing, [
+      cand({ id: "english-only", rule: "generated wording" }),
+      cand({ id: "old-off", rule: "again" }),
+      cand({ id: "broken_id", rule: "x" }),
+      cand({ id: "same-text", rule: "MY   own wording" }),
+      cand({ id: "new-one", source: "user" }),
+    ]);
+    expect(r.text.startsWith(existing.replace(/\s+$/, ""))).toBe(true);
+    expect(r.skipped.map((s) => [s.id, s.reason])).toEqual([
+      ["english-only", "id-exists"],
+      ["old-off", "id-exists"],
+      ["broken_id", "id-exists"],
+      ["same-text", "duplicate-text"],
+    ]);
+    const parsed = parseRulesMd(r.text);
+    const byId = Object.fromEntries(parsed.rules.map((x) => [x.id, x]));
+    expect(byId["english-only"]).toMatchObject({ rule: "MY OWN WORDING", status: "active", source: "user" });
+    expect(byId["new-one"]).toMatchObject({ status: "suggested", source: "inferred" });
+    expect(byId["broken_id"]).toBeUndefined();
+    expect(r.added.map((x) => x.id)).toEqual(["new-one"]);
+  });
+
+  it("skips ids that exist in config.json rules or disabledRules, and is idempotent", () => {
+    const c = [cand({ id: "in-config" }), cand({ id: "muted" }), cand({ id: "fresh" })];
+    const opts = {
+      configRules: [{ id: "in-config", rule: "x", scope: ["**"], severity: "low" as const, status: "active" as const }],
+      disabledRules: ["muted"],
+    };
+    const first = mergeSuggestions(null, c, opts);
+    expect(first.added.map((x) => x.id)).toEqual(["fresh"]);
+    const second = mergeSuggestions(first.text, c, opts);
+    expect(second.added).toEqual([]);
+    expect(second.text).toBe(first.text);
+  });
+});
+
+describe("runInit (mock model, fixture repo)", () => {
+  it("collects, drops tool-enforced rules and only suggests the rest", async () => {
+    const usage = {
+      inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
+      outputTokens: { total: 5, text: 5, reasoning: 0 },
+    };
+    const rules = [
+      cand({ id: "english-only", rule: "Everything in English.", source: "CLAUDE.md" }),
+      cand({ id: "no-product-ui-in-panel-public", rule: "No product UI in panel/public/.", scope: ["panel/public/**"], severity: "high", source: "CLAUDE.md" }),
+      cand({ id: "hooks-rules", rule: "Follow the rules of hooks.", source: ".oxlintrc.json", kind: "tool-enforced" }),
+    ];
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => ({
+        content: [{ type: "text", text: JSON.stringify({ rules }) }],
+        finishReason: { unified: "stop", raw: undefined },
+        usage,
+        warnings: [],
+      }),
+    });
+    const r = await runInit({ workspace: ws, model });
+    expect(r.filtered.toolEnforced.map((c) => c.id)).toEqual(["hooks-rules"]);
+    expect(r.merge.added.map((x) => x.id)).toEqual(["english-only", "no-product-ui-in-panel-public"]);
+    const parsed = parseRulesMd(r.merge.text);
+    expect(parsed.rules.every((x) => x.status === "suggested")).toBe(true);
+  });
+});
