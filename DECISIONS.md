@@ -103,17 +103,24 @@ Cómo mantenerlo: cada decisión nueva se agrega al final con el siguiente núme
 - **Por qué:** en una prueba, el modelo afirmó que no existía `CaseFilters.test.tsx`, y sí existía. Un solo falso positivo así hace que un equipo deje de confiar.
 
 ### D-015 — Más determinismo: chequeos mecánicos, temperatura 0, pasada exhaustiva por regla
-- **Fecha:** 2026-09-24 · **Estado:** En curso (v0.6.1: B42a, B42b y B42c commiteados; sin subir)
+- **Fecha:** 2026-09-24 · **Estado:** Vigente (v0.6.1 y v0.7.1, commiteados; sin subir a producción)
 - **Decisión:** un campo `check:` por regla (`max-lines`, `colocated-test`, `forbid-import`, `forbid-pattern`) que se comprueba con código, sin modelo; `temperature: 0` por defecto; y una pasada por regla que exige veredicto y todas las ubicaciones.
 - **Por qué:** en los 6 PRs de prueba el modelo encontró 6 de 7 problemas sembrados, con 0 falsos positivos. Se le escapó un comentario en español: reportó una ubicación de la regla y se detuvo tras 2 pasos. Reproducido en local con `dropped` vacío: omisión del modelo, no del filtro. Además el código no fijaba la temperatura, por eso había variación entre corridas.
 - **Diseño elegido:** los chequeos corren siempre, aunque el modelo falle o se agote el presupuesto, y no se le piden de nuevo al modelo.
 
 ### D-016 — Modos de revisión por PR: `basic`, `standard`, `deep`
-- **Fecha:** 2026-09-24 · **Estado:** En curso (v0.7.0: B43)
+- **Fecha:** 2026-09-24 · **Estado:** Vigente (v0.7.0, commiteado; sin subir a producción)
 - **Decisión (pedido del usuario):** el usuario elige la profundidad por PR. Prioridad: `--mode` del CLI, etiqueta `guardrails:*`, línea `guardrails-mode:` en la descripción, reglas automáticas en la config (por tamaño o rutas), y por último `standard`. Poner o quitar una etiqueta `guardrails:*` re-dispara el review. `prOverride: "none"` en la config impide que el autor del PR relaje su propia revisión.
 - **Valores iniciales:** `basic` 4 pasos y $0.05; `standard` 12 pasos y $0.25; `deep` 24 pasos, $0.75, 2 pasadas en paralelo y veredicto por regla obligatorio.
 - **Riesgo aceptado:** por defecto las etiquetas valen, así que el autor de un PR puede bajar el modo de su propio PR. Se documenta y se mitiga con `prOverride`.
 
+### D-022 — Un chequeo mecánico parcial no silencia al modelo (cobertura exhaustiva o parcial)
+- **Fecha:** 2026-09-25 · **Estado:** Vigente (v0.7.1)
+- **Decisión:** los chequeos tienen una cobertura. `max-lines` y `colocated-test` son **exhaustivos**: deciden la regla entera y al modelo se le dice que la salte. `forbid-import` y `forbid-pattern` son **parciales**: al modelo se le muestran las ubicaciones que el chequeo ya encontró, no las repite, y sigue buscando lo que el chequeo no puede ver. Un campo opcional `check-coverage: exhaustive | partial` en `rules.md` permite cambiar el valor por defecto.
+- **Por qué:** la v0.6.1 asumió que un chequeo cubre toda su regla. Un patrón de caracteres acentuados no ve el texto en español sin acentos, y `<h2>Recordatorios</h2>` dejó de detectarse en todos los modos (lo encontraba la v0.6.0). Verificado con el modelo real: con el cambio vuelve a detectarse (confianza 0.95), y la rama limpia sigue sin hallazgos.
+- **Descartado:** mejorar la expresión regular de acentos (no cubre el español sin acentos en general) y volver a que el modelo revise todas las reglas ignorando los chequeos (pierde el determinismo de D-015).
+- **Consecuencia:** las reglas parciales vuelven al prompt del modelo, así que cuestan algo más ($0.018 contra $0.007 a $0.012 en `case-reminders`; dos corridas, no hay tendencia).
+- **Decidido por:** el orquestador, tras la medición B45; nació de un error propio del diseño anterior.
 ---
 
 ## Validación y proceso
@@ -138,6 +145,13 @@ Cómo mantenerlo: cada decisión nueva se agrega al final con el siguiente núme
 - **Decidido por:** el usuario pidió el documento; el diseño del formato lo propuso el orquestador.
 - **Debilidades reconocidas del ejemplo:** se escribió de forma retroactiva, con algunos motivos inferidos; la numeración sigue temas y no el tiempo; y no hay un chequeo automático (ya se coló un error de referencia cruzada, D-018 en vez de D-019).
 
+### D-023 — No se sube a producción una versión cuya corrección no se verificó con un modelo real
+- **Fecha:** 2026-09-25 · **Estado:** Vigente
+- **Decisión:** puerta de publicación. Antes de subir a `master` (Vercel redeploya solo), toda versión con cambios de comportamiento pasa: `pnpm check` y `pnpm build` verdes, escaneo de secretos, y una verificación real con tope de gasto sobre casos conocidos (uno con el problema y uno limpio). Si esa verificación no puede correr, se documenta y se decide explícitamente; no se sube por omisión.
+- **Por qué:** la v0.7.0 tenía una regresión (D-022) que solo apareció al medir con el modelo real. Con la puerta, no llegó a producción.
+- **Descartado:** commitear y subir la corrección sin la prueba real y anotarla como pendiente.
+- **Nota sobre permisos:** el clasificador de permisos de Claude Code bloqueó dos veces a un subagente al clonar y correr el CLI sobre un repo externo. No se rodeó el bloqueo: el usuario autorizó la ejecución de forma explícita y quedó registrado.
+- **Decidido por:** propuesta del planner de Baking, aceptada por el usuario al pedir que se hiciera la verificación.
 ---
 
 ## Planificadas
