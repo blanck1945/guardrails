@@ -23,7 +23,19 @@ Real verification, one run per branch (local CLI, `zai:glm-5.3`, temperature 0, 
 - The pre-run estimate printed by the CLI (about US$0.17 per run) overstates the real cost roughly 10 times for this small PR, because it assumes the PLAN section 9 profile of 273k input tokens.
 - One run per branch: whether the heading is found on every run was not measured.
 
+**Production smoke test of v0.7.0/v0.7.1 (deployed commit `8ed37e2`), 2026-09-24.** Label `guardrails:deep` added to PR #5 of `causas-viewer` (feat/case-reminders), which had one review from the v0.6.0 deployment. The production `rules.md` has no `check:` lines, so this run exercised the modes and the label trigger, not the mechanical checks.
+- The `labeled` action re-triggered the review: a second review from the App appeared 50 s after the label (23:37:49 to 23:38:39 UTC). The summary states the mode and its source ("Review mode: deep (label guardrails:deep)").
+- All three seeded problems of that PR were found, all by the model: business days reimplemented in the hook, the Spanish comment in the hook, and the hardcoded heading `Recordatorios` in the component.
+- **Defect: 6 inline comments for 3 problems.** The business-day finding appears twice (`useReminders.ts:19` and `:26`) and so does the Spanish comment (`:18` and `:25`). Deep runs two passes and unites their findings; the dedupe window is 3 lines, and the two passes anchored the same problem 7 lines apart, so both were published. The real lines are around 20 and 21, so the anchors of both passes are also imprecise.
+- One extra low finding (`useReminders.ts:40`, `today` fallback recomputed per render) that is not in the answer key; it looks like a real minor smell, not judged.
+- The summary is the model's free notes ("No other issues: tests are colocated...; Checked repository/domain modules..."), which reads like internal reasoning rather than a summary.
+- Cost and duration of the deep review were not read from the Vercel logs (`review.analyzed`); the 50 s is the label-to-review latency seen from GitHub.
+
 ### Next (v0.7.2)
+- Dedupe across the two `deep` passes by file, rule and title similarity regardless of line distance, and merge them into one comment that lists both locations, so one problem produces one comment.
+- Snap each finding's anchor to the added line that contains the quoted text (validate the line against the diff) instead of trusting the model's line number.
+- Give the review summary a fixed structure (mode and source, counts by origin, then at most two lines of notes) instead of the model's free notes.
+- Read cost and duration of production reviews from the Vercel logs (`review.analyzed`) and record them, per mode.
 - Make `LocalWorkspace` read head files from the head revision (`git show`) instead of the working tree.
 - Judge the extra low-confidence findings of `deep` (are they noise?) and, if so, raise its confidence floor or require them to cite evidence lines.
 - Make the CLI dry-run estimate use the size of the actual diff instead of the fixed PLAN section 9 profile.
