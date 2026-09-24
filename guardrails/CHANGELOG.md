@@ -12,10 +12,38 @@ The "Next" of a version is the "What we did" of the following one. Newest first.
 - Decisions taken where the request was ambiguous: `standard` keeps following `config.strictness` for confidence and cap (so existing repos see no change), while `basic` and `deep` fix their own; `--mode agent|single` (old meaning) is still accepted and `--engine agent|single` was added, because `--mode` now names the review mode; the CLI now applies the mode's spend cap when `--budget-usd` is not given; `GUARDRAILS_REVIEW_BUDGET_USD`, when set, replaces the mode's cap; `GUARDRAILS_REVIEW_TIMEOUT_SEC` (default 240) is an upper bound, `basic` asks for 120 s; a pass that times out loses its partial work (the agent only reports at the end).
 
 ### What we observed
-- (filled in by the B45 re-measurement below)
+Re-measurement of v0.6.1 + v0.7.0 on the PRs of `blanck1945/causas-viewer` (local CLI, `zai:glm-5.3`, temperature 0, review with `--mode`, `--budget-usd` on every run). The rules of `main` were copied to a temporary clone (never pushed) and given checks there: `english-code-spanish-ui` = `forbid-pattern: [áéíóúÁÉÍÓÚñÑ¿¡]` (exclude `src/i18n/**`, tests), `colocated-tests` = `colocated-test`, `layered-data-access` = `forbid-import: data/repository`, `one-component-per-file` = `max-lines: 150`. Real total cost: US$0.2753 for 15 runs (cap was US$0.40); the requested runs cost US$0.2151 and the optional `feat/case-notes-checklist` runs US$0.0602. Mode was chosen with `--mode`, so the label/description path was not exercised here.
+
+| Branch | Mode | Findings (file:line, rule, origin) | Cost | Time | Steps |
+|---|---|---|---|---|---|
+| clients-page (clean) | basic | none | 0.0100 | 17 s | 2 |
+| clients-page (clean) | standard | none | 0.0147 | 34 s | 3 |
+| upcoming-deadlines (clean) | basic | none | 0.0088 | 13 s | 2 |
+| upcoming-deadlines (clean) | standard | none | 0.0107 | 22 s | 2 |
+| csv-export | standard r1 | CaseExportButton.tsx:1 layered-data-access (check); csv.ts:1 colocated-tests (check) | 0.0103 | 30 s | 3 |
+| csv-export | standard r2 | identical to r1 | 0.0036 | 16 s | 2 |
+| csv-export | deep | the same 2 checks, plus 4 low-confidence model findings without rule (CaseExportButton.tsx:8 and :9 export ignores active filters, csv.ts:3 no formula-injection protection, csv.ts:16 raw status enum), confidence 0.5 to 0.55 | 0.0459 | 63 s | 8 (2 passes) |
+| case-reminders | standard r1 | useReminders.ts:20 english-code-spanish-ui (check); useReminders.ts:21 deadline-logic-centralized (model, conf 0.95) | 0.0117 | 32 s | 2 |
+| case-reminders | standard r2 | same two (model conf 1.0) | 0.0071 | 22 s | 2 |
+| case-reminders | deep | the same two, plus useReminders.ts:51 deadline-logic-centralized (low, 0.7, "0 business days left" on a weekend deadline) | 0.0313 | 39 s | 5 (2 passes) |
+| sort-cases | standard r1 | useCases.ts:36 comparator puts cases without a deadline first (model, medium, 0.8) | 0.0173 | 53 s | 4 |
+| sort-cases | standard r2 | same problem at :35 (low, 0.7) | 0.0124 | 59 s | 3 |
+| sort-cases | deep | useCases.ts:35 same comparator problem (low, 0.6) and useCases.ts:35 deadline-logic-centralized (high, 0.8); a third duplicate was dropped | 0.0313 | 46 s | 6 (2 passes) |
+| case-notes-checklist (extra) | standard | CaseWorkspace.tsx:151 one-component-per-file: file has 156 lines (check) | 0.0160 | 29 s | 1 |
+| case-notes-checklist (extra) | deep | same check finding | 0.0442 | 38 s | 4 (2 passes) |
+
+- Success criteria: 0 findings on the two clean branches in all 4 runs (basic and standard) (met); the Spanish comment at `useReminders.ts:20` is detected in standard (2 of 2 runs) and deep, always with origin `check` (met); check findings are identical between the two runs of the same mode on every branch (met, same file, line, rule and text); the comparator bug of `feat/sort-cases` is detected in deep (met; also in both standard runs, with a different line, severity and confidence each time: 36/medium/0.8 vs 35/low/0.7).
+- Variation between runs of the same mode: check findings none; model findings kept the same problem but varied in line, severity and confidence (see above). Only 2 runs per cell, so this is a small sample.
+- A loss found by the measurement: the seeded unaccented Spanish label `<h2>Recordatorios</h2>` in `ReminderList.tsx` (the one v0.6.0 found) is no longer reported in any mode. The accent regex cannot see it, and because the rule has a check the model is told the rule is verified mechanically and skips it (the deep notes even say the heading "is an i18n inconsistency" but not reportable). A partial check turns a rule the model used to cover into a blind spot.
+- `deep` costs about 3 to 4 times `standard` per PR (US$0.031 to 0.046 against 0.004 to 0.017) and takes 39 to 63 s with the two passes concurrently (well inside 240 s). On these PRs it added the comparator's second finding and 5 low-confidence extra model findings (4 on csv-export, 1 on case-reminders) that were not among the seeded problems; whether they are useful was not judged. The per-rule verdicts were returned (`ruleChecks`) and no report was bounced or marked `incomplete-rule-checks` in these runs.
+- `temperature: 0` was accepted by Z.ai on all 15 runs. No run hit a budget, timeout or rate limit.
+- Found while measuring: `LocalWorkspace` reads head files from the working tree, not from the head revision, so the CLI must have the head branch checked out for `max-lines`, `colocated-test` and `forbid-pattern(only)` (and for the model's `read_file`) to see the right content. The runs above checked out each branch first. This is an old limitation, not new in this version.
 
 ### Next (v0.7.1)
-- Depends on the measurement above.
+- Partial checks: let a rule declare that its check is only a proxy (for example `check-mode: hint`), so the model still verifies it and only the check's findings are deduplicated against the model's (fixes the lost unaccented label).
+- Make `LocalWorkspace` read head files from the head revision (`git show`) instead of the working tree.
+- Judge the extra low-confidence findings of `deep` (are they noise?) and, if so, raise its confidence floor or require them to cite evidence lines.
+- More runs per cell to measure model variation with more than 2 samples.
 - Efficiency ideas (not implemented yet): a model per mode (for example glm-5.3-flash for `basic`); incremental re-review on push (only what changed since the last reviewed commit); less context per call and prompt-prefix ordering so the provider cache hits; skip trivial diffs (lockfiles, formatting, docs only); a daily spend cap; cost visibility per review (cost and mode in the PR summary, aggregated over time).
 
 ## v0.6.1 — 2026-09-25
