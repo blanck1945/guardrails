@@ -1,5 +1,6 @@
 /**
- * Local CLI. `pnpm guardrails smoke` runs one minimal real-model check (see smoke.ts). Usage: pnpm guardrails init [--path <dir>] [--write] [--min-confidence <0-1>]
+ * Local CLI. `pnpm guardrails review` reviews a git range (see review.ts); `pnpm guardrails hook install|uninstall`
+ * manages the pre-push hook (see hook.ts). `pnpm guardrails smoke` runs one minimal real-model check (see smoke.ts). Usage: pnpm guardrails init [--path <dir>] [--write] [--min-confidence <0-1>]
  *                                        [--include-tool-enforced] [--model <id>]
  *                                        [--budget-usd <N>] [--dry-run] [--yes] [--llm-cache]
  * Model: `--model` or GUARDRAILS_MODEL (`zai:<id>`, `deepseek:<id>` or an AI Gateway id). Needs the matching
@@ -27,7 +28,43 @@ async function readOptional(file: string): Promise<string | null> {
   }
 }
 
+function loadToolEnv(): void {
+  // The tool's own credentials (never the target repo's .env). Never overrides variables already set.
+  for (const file of [".env.local", ".env"]) {
+    try {
+      process.loadEnvFile(file);
+    } catch {
+      /* missing */
+    }
+  }
+}
+
+async function hookMain(args: string[]): Promise<number> {
+  const { installHook, uninstallHook } = await import("./hook");
+  const { values, positionals } = parseArgs({ args, allowPositionals: true, options: { path: { type: "string", default: "." } } });
+  const action = positionals[0];
+  if (action !== "install" && action !== "uninstall") {
+    console.error("Usage: guardrails hook install|uninstall [--path <repo>]");
+    return 2;
+  }
+  try {
+    const repo = path.resolve(values.path as string);
+    const toolDir = path.resolve(__dirname, "../..");
+    const r = action === "install" ? await installHook(repo, toolDir) : await uninstallHook(repo);
+    (r.status === "refused" ? console.error : console.log)(r.message);
+    return r.status === "refused" ? 2 : 0;
+  } catch (err) {
+    console.error(`guardrails: ${err instanceof Error ? err.message : String(err)}`);
+    return 2;
+  }
+}
+
 async function main(argv: string[]): Promise<number> {
+  if (argv[0] === "review") {
+    loadToolEnv();
+    return (await import("./review")).reviewMain(argv.slice(1));
+  }
+  if (argv[0] === "hook") return hookMain(argv.slice(1));
   if (argv[0] === "smoke") {
     for (const file of [".env.local", ".env"]) {
       try {
