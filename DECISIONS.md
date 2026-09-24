@@ -152,6 +152,14 @@ Cómo mantenerlo: cada decisión nueva se agrega al final con el siguiente núme
 - **Descartado:** commitear y subir la corrección sin la prueba real y anotarla como pendiente.
 - **Nota sobre permisos:** el clasificador de permisos de Claude Code bloqueó dos veces a un subagente al clonar y correr el CLI sobre un repo externo. No se rodeó el bloqueo: el usuario autorizó la ejecución de forma explícita y quedó registrado.
 - **Decidido por:** propuesta del planner de Baking, aceptada por el usuario al pedir que se hiciera la verificación.
+### D-024 — Baking para todo el trabajo de implementación, en este repo y en los demás
+- **Fecha:** 2026-09-25 · **Estado:** Vigente
+- **Decisión (pedido del usuario: "quiero baking para todo"):** además de `baking require on` en este repo (D-018), se activó `baking auto-route on`, el comportamiento por defecto en todos los repos. Toda implementación, incluida la de documentos, se clasifica y pasa por Baking. Solo las preguntas, explicaciones y revisiones sin cambio de código salen del flujo (gate-out).
+- **Por qué:** el protocolo se siguió a medias mientras no era obligatorio, y la corrida más cara (B42 a B45, unos 304 mil tokens) fue justo la que arrancó sin handoff. Con el modo obligatorio, las tareas con handoff previo fueron más acotadas.
+- **Sin cambios:** la configuración de consumo se mantiene: handoff obligatorio, máximo 2 subagentes en paralelo, y las tareas triviales de 12 palabras o menos se resuelven sin planner.
+- **Reversible:** `baking auto-route off` desactiva el modo global sin tocar el modo obligatorio de cada repo.
+- **Pendiente:** el aviso de Baking indica que la regla del router de Cursor (`~/.cursor/rules/baking-router.mdc`) puede requerir `baking install` para actualizarse. No se ejecutó, porque sobrescribe skills y agentes globales.
+- **Decidido por:** el usuario.
 ---
 
 ## Planificadas
