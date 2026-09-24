@@ -4,6 +4,7 @@ import { emptyUsage, sumUsage, type UsageTotals } from "../agent/budget";
 import { costSince, type CostTracker } from "../cost";
 import { defaultModelSpec, jsonOnlyInstruction, modelSpecOf, resolveModel } from "../models";
 import { estimateCostUsd } from "../pricing";
+import { samplingFor } from "../sampling";
 import type { RepoContext } from "./collect";
 
 /** At most this many rules are requested and kept (highest confidence first): fewer rules = less output and time. */
@@ -193,6 +194,7 @@ export async function synthesizeRules(
 ${jsonOnlyInstruction(SYNTHESIS_EXAMPLE)}`,
         prompt: buildSynthesisPrompt({ ...context, files }),
         maxOutputTokens,
+        ...samplingFor(model),
         abortSignal: signal,
       });
       return { rules: result.output.rules, usage: result.steps.length ? sumUsage(result.steps.map((s) => s.usage)) : emptyUsage() };

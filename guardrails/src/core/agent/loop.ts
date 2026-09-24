@@ -2,6 +2,7 @@ import { generateText, isStepCount, type LanguageModel, type StepResult, type To
 import type { GuardrailsConfig } from "../config";
 import type { CostTracker } from "../cost";
 import { resolveModel } from "../models";
+import { samplingFor } from "../sampling";
 import { findingSchemaV2, type FindingV2 } from "../findings";
 import type { ReviewInput } from "../types";
 import type { Workspace } from "../workspace";
@@ -26,6 +27,8 @@ export interface AgentRunOptions {
   costTracker?: CostTracker | undefined;
   /** Rules whose mechanical check already ran: listed to the model as "do not report". */
   mechanicalRuleIds?: ReadonlySet<string> | undefined;
+  /** Temperature preferred by the review mode (`GUARDRAILS_TEMPERATURE` overrides it). */
+  temperature?: number | undefined;
 }
 
 export interface AgentRunResult {
@@ -87,6 +90,7 @@ export async function runReviewAgent(opts: AgentRunOptions): Promise<AgentRunRes
     // The model must always call a tool; the only way to finish is report_findings.
     toolChoice: "required",
     maxOutputTokens: budget.maxOutputTokens,
+    ...samplingFor(opts.model, opts.temperature),
     abortSignal: opts.abortSignal,
     stopWhen: [
       () => report !== undefined,

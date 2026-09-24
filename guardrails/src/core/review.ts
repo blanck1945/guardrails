@@ -4,6 +4,7 @@ import { runChecks, type CheckSkip } from "./checks";
 import { parseUnifiedDiff } from "./diff";
 import { defaultModelSpec, jsonOnlyInstruction, modelSpecOf, resolveModel } from "./models";
 import { estimateCostUsd } from "./pricing";
+import { samplingFor } from "./sampling";
 import { runReviewAgent } from "./agent/loop";
 import { emptyUsage, sumUsage, type UsageTotals } from "./agent/budget";
 import type { GuardrailsConfig } from "./config";
@@ -36,6 +37,8 @@ export interface ReviewOptions {
   abortSignal?: AbortSignal;
   /** Counts spend and stops the run (`BudgetExceededError`) when its cap is reached. */
   costTracker?: CostTracker;
+  /** Temperature preferred by the review mode (`GUARDRAILS_TEMPERATURE` overrides it). */
+  temperature?: number;
 }
 
 export interface ReviewOutput {
@@ -78,6 +81,7 @@ export async function reviewDiff(
     workspace,
     abortSignal,
     costTracker,
+    temperature,
   }: ReviewOptions,
 ): Promise<ReviewOutput> {
   const before = costTracker?.snapshot();
@@ -151,7 +155,7 @@ export async function reviewDiff(
   const modelPart = async () => {
     if (mode === "agent") {
       if (!workspace) throw new Error("reviewDiff: mode 'agent' requires a workspace");
-      const run = await runReviewAgent({ model, config, workspace, input, abortSignal, costTracker, mechanicalRuleIds: mechanical });
+      const run = await runReviewAgent({ model, config, workspace, input, abortSignal, costTracker, mechanicalRuleIds: mechanical, temperature });
       const v = await verify(run.findings);
       return { ...v, summary: run.notes ?? "", usage: run.usage, incomplete: run.incomplete, notes: run.notes };
     }
@@ -162,6 +166,7 @@ export async function reviewDiff(
 
 ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
       prompt: buildUserPrompt(input),
+      ...samplingFor(model, temperature),
       abortSignal,
     });
     const usage = result.steps.length ? sumUsage(result.steps.map((s) => s.usage)) : emptyUsage();

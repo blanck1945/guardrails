@@ -71,6 +71,8 @@ Loaded from the process environment or from `guardrails/.env.local` (never commi
 | `GUARDRAILS_MODEL` | Model spec: `zai:<id>`, `deepseek:<id>` or an AI Gateway id (default `anthropic/claude-sonnet-5`). |
 | `ZAI_API_KEY`, `DEEPSEEK_API_KEY`, `AI_GATEWAY_API_KEY` | Credential for the chosen model provider. |
 | `GUARDRAILS_THINKING=1` | Z.ai only: keep the model's default reasoning. Without it Guardrails sends `thinking: disabled` (models that allow it) or `reasoning_effort: low` (GLM-5.3 family, which cannot disable reasoning). |
+| `GUARDRAILS_TEMPERATURE` | Sampling temperature for every review/init call (default `0`; Z.ai accepts 0 to 1). Overrides the review mode's own value. |
+| `GUARDRAILS_SEED` | Integer seed. By default a fixed seed is sent only to providers that document one (OpenAI ids through the Gateway); Z.ai does not, so none is sent unless you set this. |
 | `GUARDRAILS_LLM_CACHE=1` | Dev/eval only: replay identical model calls from disk. |
 | `GUARDRAILS_SKIP=1` | Skips the pre-push hook for one push. |
 | `GUARDRAILS_BUDGET_USD` | Per-review budget used by the hook (default `0.50`). |

@@ -7,3 +7,4 @@ export * from "./cost";
 export * from "./models";
 export * from "./pricing";
 export * from "./spend";
+export * from "./sampling";
