@@ -5,7 +5,7 @@ import { estimateCostUsd } from "./pricing";
 import { runReviewAgent } from "./agent/loop";
 import { emptyUsage, sumUsage, type UsageTotals } from "./agent/budget";
 import type { GuardrailsConfig } from "./config";
-import { dropUnknownRuleFindings } from "./rules/select";
+import { stripUnknownRuleIds } from "./rules/select";
 import { buildSystemPrompt, buildUserPrompt } from "./prompt";
 import { reviewResultSchema, type Finding, type ReviewInput } from "./types";
 import type { Workspace } from "./workspace";
@@ -37,6 +37,8 @@ export interface ReviewOutput {
   /** Agent mode only: the model never produced a valid report. */
   incomplete?: boolean;
   notes?: string | undefined;
+  /** Findings the model reported but that were filtered out, with the reason. */
+  dropped: { finding: Finding; reason: "low-confidence" | "comment-type-disabled" }[];
 }
 
 /**
@@ -58,16 +60,26 @@ export async function reviewDiff(
   const costOf = (usage: UsageTotals): number | null =>
     costTracker && before ? costSince(costTracker, before) : estimateCostUsd(modelSpecOf(model), usage);
   const min = MIN_CONFIDENCE[config.strictness as 1 | 2 | 3];
-  const keepBasic = (f: Finding) => f.confidence >= min && config.commentTypes.includes(f.type);
   // A finding may only cite a rule that was given to the model (active rules in `config.rules`).
-  const filterFindings = (fs: Finding[]) => dropUnknownRuleFindings(fs.filter(keepBasic), config.rules);
+  const filterFindings = (fs: Finding[]) => {
+    const dropped: ReviewOutput["dropped"] = [];
+    const basic: Finding[] = [];
+    for (const f of fs) {
+      if (f.confidence < min) dropped.push({ finding: f, reason: "low-confidence" });
+      else if (!config.commentTypes.includes(f.type)) dropped.push({ finding: f, reason: "comment-type-disabled" });
+      else basic.push(f);
+    }
+    return { findings: stripUnknownRuleIds(basic, config.rules), dropped };
+  };
 
   if (mode === "agent") {
     if (!workspace) throw new Error("reviewDiff: mode 'agent' requires a workspace");
     const run = await runReviewAgent({ model, config, workspace, input, abortSignal, costTracker });
+    const { findings, dropped } = filterFindings(run.findings);
     return {
       summary: run.notes ?? "",
-      findings: filterFindings(run.findings),
+      findings,
+      dropped,
       mode,
       usage: run.usage,
       costUsd: costOf(run.usage),
@@ -85,9 +97,11 @@ export async function reviewDiff(
   });
 
   const usage = result.steps.length ? sumUsage(result.steps.map((s) => s.usage)) : emptyUsage();
+  const { findings, dropped } = filterFindings(result.output.findings);
   return {
     summary: result.output.summary,
-    findings: filterFindings(result.output.findings),
+    findings,
+    dropped,
     mode,
     usage,
     costUsd: costOf(usage),

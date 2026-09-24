@@ -4,7 +4,7 @@ import { reviewDiff, serializeRulesMd, type Rule } from "@/core";
 import { buildAgentInstructions } from "@/core/agent";
 import { buildSystemPrompt } from "@/core/prompt";
 import { defaultConfig } from "@/core/config";
-import { dropUnknownRuleFindings, selectRulesForFiles } from "@/core/rules";
+import { stripUnknownRuleIds, selectRulesForFiles } from "@/core/rules";
 import { loadReviewRules, ruleCitation, rulesChangeNote, rulesForPr } from "./review-rules";
 
 const mk = (over: Partial<Rule> & { id: string }): Rule => ({
@@ -46,14 +46,15 @@ describe("selectRulesForFiles", () => {
   });
 });
 
-describe("dropUnknownRuleFindings", () => {
-  it("keeps findings without ruleId or with a present rule, drops unknown ones", () => {
+describe("stripUnknownRuleIds", () => {
+  it("keeps every finding; unknown or inactive rule ids are stripped, known ones stay", () => {
     const rules = [mk({ id: "known" }), mk({ id: "sugg", status: "suggested" })];
-    const out = dropUnknownRuleFindings(
+    const out = stripUnknownRuleIds(
       [{ t: "a" }, { t: "b", ruleId: "known" }, { t: "c", ruleId: "ghost" }, { t: "d", ruleId: "sugg" }],
       rules,
     );
-    expect(out.map((f) => f.t)).toEqual(["a", "b"]);
+    expect(out.map((f) => f.t)).toEqual(["a", "b", "c", "d"]);
+    expect(out.map((f) => f.ruleId)).toEqual([undefined, "known", undefined, undefined]);
   });
 });
 
@@ -126,7 +127,7 @@ describe("prompts", () => {
   });
 });
 
-describe("reviewDiff drops findings that cite unknown rules", () => {
+describe("reviewDiff strips unknown rule ids", () => {
   const finding = (title: string, ruleId?: string) => ({
     file: "src/a.ts",
     line: 1,
@@ -137,7 +138,7 @@ describe("reviewDiff drops findings that cite unknown rules", () => {
     body: "b",
     ...(ruleId ? { ruleId } : {}),
   });
-  it("keeps generic findings and known rules only", async () => {
+  it("keeps every finding and strips ruleIds that were never given to the model", async () => {
     const model = new MockLanguageModelV4({
       doGenerate: async () => ({
         content: [
@@ -161,6 +162,7 @@ describe("reviewDiff drops findings that cite unknown rules", () => {
       { diff: "+x", context: {}, docs: {} },
       { config: { ...defaultConfig, rules: [mk({ id: "english-only" })] }, model },
     );
-    expect(r.findings.map((f) => f.title)).toEqual(["generic", "known"]);
+    expect(r.findings.map((f) => f.title)).toEqual(["generic", "known", "ghost"]);
+    expect(r.findings.map((f) => f.ruleId)).toEqual([undefined, "english-only", undefined]);
   });
 });

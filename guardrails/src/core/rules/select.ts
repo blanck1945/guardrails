@@ -20,12 +20,17 @@ export function selectRulesForFiles(rules: readonly Rule[], changedFiles: readon
 
 /**
  * A finding that names a `ruleId` must refer to a rule that was given to the model.
- * Findings citing an unknown rule (hallucinated or out of scope) are discarded.
+ * An unknown id (hallucinated, out of scope, or not active) is stripped and the finding is kept:
+ * the problem it describes can still be real, it just is not attributed to a rule.
  */
-export function dropUnknownRuleFindings<T extends { ruleId?: string | undefined }>(
+export function stripUnknownRuleIds<T extends { ruleId?: string | undefined }>(
   findings: readonly T[],
   rules: readonly Rule[],
 ): T[] {
   const ids = new Set(rules.filter((r) => r.status === "active").map((r) => r.id));
-  return findings.filter((f) => !f.ruleId || ids.has(f.ruleId));
+  return findings.map((f) => {
+    if (!f.ruleId || ids.has(f.ruleId)) return f;
+    const { ruleId: _unknown, ...rest } = f;
+    return rest as T;
+  });
 }

@@ -110,6 +110,7 @@ export async function smoke(): Promise<void> {
       console.log(`incomplete: ${r.incomplete}; steps: ${r.usage.steps}`);
       console.log(`findings (${r.findings.length}):`);
       for (const f of r.findings) console.log(`  - ${f.file}:${f.line} [${f.severity}/${f.type}, conf ${f.confidence}] ${f.title}`);
+      for (const d of r.dropped) console.log(`  dropped (${d.reason}): ${d.finding.file}:${d.finding.line} [${d.finding.type}, conf ${d.finding.confidence}] ${d.finding.title}`);
       if (r.notes) console.log(`notes: ${r.notes}`);
       console.log(`usage: ${JSON.stringify(r.usage)}`);
       console.log(`review cost: ${fmtCost(r.costUsd)}`);

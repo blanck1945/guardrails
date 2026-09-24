@@ -29,6 +29,9 @@ export const PRICES: Readonly<Record<string, ModelPrice>> = {
   "anthropic/claude-haiku-4-5": haiku45,
   "zai:glm-4.5-air": { input: 0.2, output: 1.1, cacheRead: 0.03, verified: VERIFIED, source: ZAI },
   "zai:glm-4.5": { input: 0.6, output: 2.2, cacheRead: 0.11, verified: VERIFIED, source: ZAI },
+  "zai:glm-5.3": { input: 1.4, output: 4.4, cacheRead: 0.26, verified: VERIFIED, source: ZAI },
+  "zai:glm-5.3-flashx": { input: 0.37, output: 1.25, cacheRead: 0.075, verified: VERIFIED, source: ZAI },
+  "zai:glm-5.3-flash": { input: 0.15, output: 0.5, cacheRead: 0.03, verified: VERIFIED, source: ZAI },
   "zai:glm-4.6": { input: 0.6, output: 2.2, cacheRead: 0.11, verified: VERIFIED, source: ZAI },
   "deepseek:deepseek-flash": deepseekFlash,
   "deepseek:deepseek-v4-flash": deepseekFlash, // legacy name, billed at the Flash price
