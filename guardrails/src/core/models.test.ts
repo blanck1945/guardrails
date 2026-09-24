@@ -53,3 +53,41 @@ describe("resolveModel", () => {
     expect(defaultModelSpec({})).toBe("anthropic/claude-sonnet-5");
   });
 });
+
+describe("zai request body (json mode + thinking)", () => {
+  /** Sends one call with json response format and returns the JSON body that reached the wire. */
+  async function bodyFor(spec: string, env: Record<string, string> = {}) {
+    let body: Record<string, unknown> = {};
+    const fetchStub = (async (_u: string | URL, init?: RequestInit) => {
+      body = JSON.parse(String(init?.body));
+      return new Response("{}", { status: 500 });
+    }) as typeof fetch;
+    const model = resolveModel(spec, { env: { ZAI_API_KEY: "k", DEEPSEEK_API_KEY: "k", ...env }, fetch: fetchStub }) as unknown as {
+      doGenerate: (o: unknown) => Promise<unknown>;
+    };
+    await model
+      .doGenerate({ prompt: [{ role: "user", content: [{ type: "text", text: "hi" }] }], responseFormat: { type: "json" } })
+      .catch(() => undefined);
+    return body;
+  }
+
+  it("never sends response_format json_object to zai (it strips the word json from the output)", async () => {
+    expect(await bodyFor("zai:glm-4.6")).not.toHaveProperty("response_format");
+    expect(await bodyFor("zai:glm-5.3-flash")).not.toHaveProperty("response_format");
+  });
+
+  it("sends thinking disabled only to zai models that allow it", async () => {
+    expect((await bodyFor("zai:glm-4.6")).thinking).toEqual({ type: "disabled" });
+    expect((await bodyFor("zai:glm-4.5-air")).thinking).toEqual({ type: "disabled" });
+    expect(await bodyFor("zai:glm-5.3")).not.toHaveProperty("thinking"); // forced thinking
+    expect(await bodyFor("zai:glm-5.3-flash")).not.toHaveProperty("thinking");
+  });
+
+  it("GUARDRAILS_THINKING=1 keeps thinking on", async () => {
+    expect(await bodyFor("zai:glm-4.6", { GUARDRAILS_THINKING: "1" })).not.toHaveProperty("thinking");
+  });
+
+  it("never sends thinking to other providers", async () => {
+    expect(await bodyFor("deepseek:deepseek-flash")).not.toHaveProperty("thinking");
+  });
+});

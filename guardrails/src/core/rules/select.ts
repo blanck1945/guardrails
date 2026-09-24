@@ -1,13 +1,15 @@
 import picomatch from "picomatch";
 import type { Rule } from "../config";
 
-function matchesScope(scope: readonly string[], file: string): boolean {
+/** Does one scope glob match a repo-relative file? A glob without "/" (e.g. "*.ts") matches the basename at any depth. */
+export function globMatchesFile(glob: string, file: string): boolean {
   const p = file.replaceAll("\\", "/").replace(/^\.\//, "");
-  return scope.some((pat) => {
-    const g = pat.trim().replace(/^\.\//, "");
-    // Same convention as ignore patterns: a glob without "/" (e.g. "*.ts") matches the basename at any depth.
-    return g !== "" && picomatch(g, { dot: true, basename: !g.includes("/") })(p);
-  });
+  const g = glob.trim().replace(/^\.\//, "");
+  return g !== "" && picomatch(g, { dot: true, basename: !g.includes("/") })(p);
+}
+
+function matchesScope(scope: readonly string[], file: string): boolean {
+  return scope.some((pat) => globMatchesFile(pat, file));
 }
 
 /**

@@ -8,7 +8,8 @@ import { parseRulesMd, serializeRulesMd } from "../rules";
 import { LocalWorkspace, type ListFilesInput, type ReadFileInput, type Workspace } from "../workspace";
 import { collectRepoContext, INIT_LIMITS } from "./collect";
 import { filterCandidates } from "./filter";
-import { runInit } from "./run";
+import { formatInitReport, runInit } from "./run";
+import { validateScopes } from "./scopes";
 import { isSecretPath, redactSecrets } from "./secrets";
 import { normalizeCandidates, synthesizeRules, type CandidateRule } from "./synthesize";
 import { mergeSuggestions } from "./write";
@@ -50,6 +51,7 @@ beforeAll(() => {
   put(".oxlintrc.json", '{ "rules": { "react-hooks/rules-of-hooks": "error", "consistent-type-imports": "error" } }\n');
   put("tsconfig.json", '{ "compilerOptions": { "strict": true, "erasableSyntaxOnly": true } }\n');
   put(".github/workflows/ci.yml", "jobs:\n  ci:\n    steps:\n      - run: pnpm lint\n      - run: pnpm tsc --noEmit\n");
+  put("seeds.config.json", "{}\n");
   put("src/app.ts", "export const x = 1;\n");
   put("panel/public/index.html", "<html></html>\n");
   put(".env", `API_KEY=${SECRET_VALUE}\n`);
@@ -300,5 +302,76 @@ describe("runInit (mock model, fixture repo)", () => {
     expect(r.merge.added.map((x) => x.id)).toEqual(["english-only", "no-product-ui-in-panel-public"]);
     const parsed = parseRulesMd(r.merge.text);
     expect(parsed.rules.every((x) => x.status === "suggested")).toBe(true);
+  });
+});
+
+describe("validateScopes (against tracked files)", () => {
+  const files = ["seeds.config.json", ".claude/settings.json", "src/a.ts", "src/b.tsx", "docs/lessons.md", "docs/lessons-old.md", "app.config.json", "app.config.mjs"];
+  const ids = (r: ReturnType<typeof validateScopes>) => r.candidates.map((c) => c.scope);
+
+  it("leaves valid globs (and rules) untouched", () => {
+    const input = [cand({ id: "ts", scope: ["src/**/*.ts", "*.tsx"] }), cand({ id: "all" }), cand({ id: "exact", scope: ["seeds.config.json"] })];
+    const r = validateScopes(input, files);
+    expect(r.scopeWarnings).toEqual([]);
+    expect(r.candidates[0]).toBe(input[0]);
+    expect(r.candidates[2]).toBe(input[2]);
+  });
+
+  it("repairs a prefix that identifies exactly one file, in scope and rule text", () => {
+    const r = validateScopes(
+      [cand({ id: "s", scope: ["seeds.config.", ".claude/settings."], rule: "Keep .claude/settings. and seeds.config., never seeds.config.jsonx." })],
+      files,
+    );
+    expect(ids(r)).toEqual([["seeds.config.json", ".claude/settings.json"]]);
+    expect(r.candidates[0]!.rule).toBe("Keep .claude/settings.json and seeds.config.json, never seeds.config.jsonx.");
+    expect(r.scopeWarnings[0]).toMatchObject({ id: "s", dropped: [], noValidScope: false });
+    expect(r.scopeWarnings[0]!.repaired).toEqual([
+      { from: "seeds.config.", to: "seeds.config.json" },
+      { from: ".claude/settings.", to: ".claude/settings.json" },
+    ]);
+    expect(r.candidates[0]!.confidence).toBe(0.9);
+  });
+
+  it("does not repair an ambiguous prefix: drops it", () => {
+    const r = validateScopes([cand({ id: "amb", scope: ["app.config.", "src/**/*.ts"] })], files);
+    expect(ids(r)).toEqual([["src/**/*.ts"]]);
+    expect(r.scopeWarnings[0]).toMatchObject({ dropped: ["app.config."], repaired: [], noValidScope: false });
+    const lessons = validateScopes([cand({ id: "l", scope: ["docs/lessons"] })], files); // matches lessons.md and lessons-old.md
+    expect(lessons.scopeWarnings[0]!.dropped).toEqual(["docs/lessons"]);
+  });
+
+  it("drops a glob with no matches; a rule left without scope falls back to ** with lower confidence", () => {
+    const r = validateScopes([cand({ id: "dead", scope: ["panel/public/**", "nothing.*"], confidence: 0.8 })], files);
+    expect(ids(r)).toEqual([["**"]]);
+    expect(r.candidates[0]!.confidence).toBeCloseTo(0.4);
+    expect(r.scopeWarnings[0]).toMatchObject({ id: "dead", dropped: ["panel/public/**", "nothing.*"], noValidScope: true });
+  });
+
+  it("does nothing without a file list", () => {
+    const input = [cand({ id: "x", scope: ["nope/**"] })];
+    expect(validateScopes(input, []).candidates[0]).toBe(input[0]);
+  });
+});
+
+describe("runInit scope validation (mock model)", () => {
+  it("repairs truncated names and reports dead-glob rules instead of suggesting them", async () => {
+    const rules = [
+      cand({ id: "seeds", rule: "In seeds.config., add only verified URLs.", scope: ["seeds.config."], confidence: 0.9 }),
+      cand({ id: "dead", rule: "Dead glob.", scope: ["no/such/**"], confidence: 0.7 }),
+    ];
+    const model = new MockLanguageModelV4({
+      doGenerate: async () => ({
+        content: [{ type: "text", text: JSON.stringify({ rules }) }],
+        finishReason: { unified: "stop", raw: undefined },
+        usage: { inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 1, text: 1, reasoning: 0 } },
+        warnings: [],
+      }),
+    });
+    const r = await runInit({ workspace: ws, model });
+    expect(r.merge.added.map((x) => [x.id, x.scope])).toEqual([["seeds", ["seeds.config.json"]]]);
+    expect(r.merge.added[0]!.rule).toContain("seeds.config.json");
+    expect(r.scopeWarnings.map((w) => w.id)).toEqual(["seeds", "dead"]);
+    expect(r.filtered.lowConfidence.map((c) => c.id)).toEqual(["dead"]);
+    expect(formatInitReport(r, { write: false, rulesPath: "x" })).toContain("Scope warnings");
   });
 });

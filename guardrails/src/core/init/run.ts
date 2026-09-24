@@ -4,6 +4,7 @@ import type { CostTracker } from "../cost";
 import { safeParseConfig } from "../config";
 import type { Workspace } from "../workspace";
 import { collectRepoContext, type RepoContext } from "./collect";
+import { validateScopes, type ScopeWarning } from "./scopes";
 import { filterCandidates, type FilteredCandidates, type FilterOptions } from "./filter";
 import { synthesizeRules, type CandidateRule } from "./synthesize";
 import { mergeSuggestions, type MergeSuggestionsResult } from "./write";
@@ -23,6 +24,8 @@ export interface InitOptions extends FilterOptions {
 export interface InitResult {
   context: RepoContext;
   candidates: CandidateRule[];
+  /** Rules whose scopes did not match the repo (repaired, dropped, or left without scope). */
+  scopeWarnings: ScopeWarning[];
   filtered: FilteredCandidates;
   merge: MergeSuggestionsResult;
   usage: UsageTotals;
@@ -33,18 +36,21 @@ export interface InitResult {
 /** collect -> synthesize -> filter -> merge. Pure with respect to the disk: the caller writes `merge.text`. */
 export async function runInit(opts: InitOptions): Promise<InitResult> {
   const context = await collectRepoContext(opts.workspace);
-  const { candidates, usage, costUsd } = await synthesizeRules(context, {
+  const synthesized = await synthesizeRules(context, {
     model: opts.model,
     abortSignal: opts.abortSignal,
     costTracker: opts.costTracker,
   });
+  const { usage, costUsd } = synthesized;
+  // Scopes are checked against the real file list before confidence filtering, so dead globs lower confidence.
+  const { candidates, scopeWarnings } = validateScopes(synthesized.candidates, context.trackedFiles ?? []);
   const filtered = filterCandidates(candidates, opts);
   const config = safeParseConfig(opts.existingConfigJson).config;
   const merge = mergeSuggestions(opts.existingRulesMd, filtered.kept, {
     configRules: config.rules,
     disabledRules: config.disabledRules,
   });
-  return { context, candidates, filtered, merge, usage, costUsd };
+  return { context, candidates, scopeWarnings, filtered, merge, usage, costUsd };
 }
 
 export function formatInitReport(r: InitResult, opts: { write: boolean; rulesPath: string }): string {
@@ -59,6 +65,17 @@ export function formatInitReport(r: InitResult, opts: { write: boolean; rulesPat
     L.push(`  + ${a.id} [${a.severity}] scope: ${a.scope.join(", ")} (source: ${a.source})`, `      ${a.rule.split("\n")[0]}`);
   }
   if (!r.merge.added.length) L.push("  (none)");
+  if (r.scopeWarnings.length) {
+    L.push("", "Scope warnings (checked against tracked files):");
+    for (const w of r.scopeWarnings) {
+      const parts = [
+        ...w.repaired.map((x) => `repaired ${x.from} -> ${x.to}`),
+        ...w.dropped.map((x) => `dropped ${x} (matches no file)`),
+        ...(w.noValidScope ? ["no valid scope left: fell back to ** with lower confidence"] : []),
+      ];
+      L.push(`  ! ${w.id}: ${parts.join("; ")}`);
+    }
+  }
   if (r.merge.skipped.length) L.push(`Already present, left untouched: ${r.merge.skipped.map((s) => s.id).join(", ")}`);
   if (r.filtered.toolEnforced.length) {
     L.push("", "Already enforced by tooling (not suggested):");

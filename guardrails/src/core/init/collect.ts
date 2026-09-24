@@ -93,6 +93,8 @@ export interface RepoContext {
   /** Files that matched but were not read, with the reason. */
   skipped: { path: string; reason: "secret" | "ignored" | "unreadable" | "budget" }[];
   totalChars: number;
+  /** Tracked (versioned) files, minus secret paths; used to validate rule scopes. Absent = not validated. */
+  trackedFiles?: string[];
 }
 
 /** Reads a whole file through the workspace's paginated readFile, up to `maxChars`. */
@@ -198,11 +200,14 @@ export async function collectRepoContext(ws: Workspace): Promise<RepoContext> {
   }
 
   let structure = "";
+  let trackedFiles: string[] | undefined;
   try {
     const all = await ws.listFiles({ limit: INIT_LIMITS.maxStructureFiles });
+    // A truncated listing cannot prove a scope matches nothing, so scopes are only validated against a complete one.
+    if (!all.truncated) trackedFiles = all.files.filter((f) => !isSecretPath(f));
     structure = summarizeStructure(all.files.filter((f) => !isSecretPath(f) && !isIgnored(f, DEFAULT_IGNORES)));
   } catch {
     /* structure is optional */
   }
-  return { files, structure, skipped, totalChars: total };
+  return { files, structure, skipped, totalChars: total, ...(trackedFiles ? { trackedFiles } : {}) };
 }

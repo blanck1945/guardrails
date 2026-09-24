@@ -1,5 +1,5 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { gateway, wrapLanguageModel, type LanguageModel, type LanguageModelMiddleware } from "ai";
+import { extractJsonMiddleware, gateway, wrapLanguageModel, type LanguageModel, type LanguageModelMiddleware } from "ai";
 import type { CostTracker } from "./cost";
 import { LlmCache, llmCacheEnabledByEnv, llmCacheKey, type CachedGeneration, type Env } from "./llm-cache";
 
@@ -23,6 +23,29 @@ const PROVIDERS: Record<string, ProviderDef> = {
   deepseek: { name: "deepseek", baseURL: "https://api.deepseek.com", keyVar: "DEEPSEEK_API_KEY" },
 };
 
+/**
+ * Z.ai models that cannot turn thinking off ("GLM-5.3 and GLM-5.3-FLASH use forced thinking", docs.z.ai
+ * thinking-mode, verified 2026-09-24). The `thinking` parameter is only sent to the other zai models.
+ */
+export function zaiThinkingIsForced(modelId: string): boolean {
+  return /^glm-5\.3/i.test(modelId);
+}
+
+/**
+ * Adjusts the request body for Z.ai:
+ *  - drops `response_format: {type: "json_object"}`. Measured 2026-09-24: in that mode Z.ai deletes the token
+ *    "json" from the output ("seeds.config.json" -> "seeds.config."), which corrupted generated file names.
+ *    JSON output is requested in the prompt instead (see `jsonOnlyInstruction`) and validated by the schema.
+ *  - sends `thinking: {type: "disabled"}` for models that allow it, unless `GUARDRAILS_THINKING=1`.
+ */
+export function zaiRequestBody(body: Record<string, any>, modelId: string, env: Env): Record<string, any> {
+  const out = { ...body };
+  if (out.response_format?.type === "json_object") delete out.response_format;
+  const thinkingWanted = env.GUARDRAILS_THINKING?.trim() === "1";
+  if (!thinkingWanted && !zaiThinkingIsForced(modelId) && out.thinking === undefined) out.thinking = { type: "disabled" };
+  return out;
+}
+
 export class MissingApiKeyError extends Error {
   constructor(
     readonly spec: string,
@@ -39,6 +62,8 @@ export interface ResolveModelOptions {
   /** `true`/instance = replay identical calls from disk. Default: `GUARDRAILS_LLM_CACHE=1`. */
   cache?: boolean | LlmCache;
   env?: Env;
+  /** Custom fetch for the zai/deepseek providers (tests). */
+  fetch?: typeof fetch;
 }
 
 const specs = new WeakMap<object, string>();
@@ -109,7 +134,16 @@ export function resolveModel(spec: LanguageModel, options: ResolveModelOptions =
       if (!id) throw new Error(`Invalid model "${spec}": expected "${spec.slice(0, sep)}:<model id>".`);
       const apiKey = env[provider.keyVar]?.trim();
       if (!apiKey) throw new MissingApiKeyError(spec, provider.keyVar);
-      model = createOpenAICompatible({ name: provider.name, baseURL: provider.baseURL, apiKey })(id);
+      const isZai = provider.name === "zai";
+      model = createOpenAICompatible({
+        name: provider.name,
+        baseURL: provider.baseURL,
+        apiKey,
+        ...(options.fetch ? { fetch: options.fetch } : {}),
+        ...(isZai ? { transformRequestBody: (b: Record<string, any>) => zaiRequestBody(b, id, env) } : {}),
+      })(id);
+      // Without json mode the model may wrap JSON in markdown fences; strip them before schema parsing.
+      if (isZai) model = wrapLanguageModel({ model, middleware: extractJsonMiddleware() });
       specs.set(model, spec);
     }
     // Plain strings (no known provider prefix) stay strings: the AI SDK routes them to the Gateway.
@@ -135,4 +169,10 @@ export function resolveModel(spec: LanguageModel, options: ResolveModelOptions =
   specs.set(wrapped, specString);
   instrumented.add(wrapped);
   return wrapped;
+}
+
+/** Prompt text asking for a bare JSON object; used where the provider's own JSON mode is not trusted (zai). */
+export function jsonOnlyInstruction(jsonSchema: unknown): string {
+  return `Respond with ONLY one JSON object that matches this JSON schema, with no markdown fences and no other text:
+${JSON.stringify(jsonSchema)}`;
 }

@@ -1,6 +1,7 @@
 import { generateText, Output, type LanguageModel } from "ai";
 import { costSince, type CostTracker } from "./cost";
-import { defaultModelSpec, modelSpecOf, resolveModel } from "./models";
+import { z } from "zod";
+import { defaultModelSpec, jsonOnlyInstruction, modelSpecOf, resolveModel } from "./models";
 import { estimateCostUsd } from "./pricing";
 import { runReviewAgent } from "./agent/loop";
 import { emptyUsage, sumUsage, type UsageTotals } from "./agent/budget";
@@ -97,7 +98,9 @@ export async function reviewDiff(
   const result = await generateText({
     model: resolveModel(model, { tracker: costTracker }),
     output: Output.object({ schema: reviewResultSchema }),
-    instructions: buildSystemPrompt(config),
+    instructions: `${buildSystemPrompt(config)}
+
+${jsonOnlyInstruction(z.toJSONSchema(reviewResultSchema))}`,
     prompt: buildUserPrompt(input),
     abortSignal,
   });

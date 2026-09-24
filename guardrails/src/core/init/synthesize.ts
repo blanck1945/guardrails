@@ -2,7 +2,7 @@ import { generateText, Output, type LanguageModel } from "ai";
 import { z } from "zod";
 import { emptyUsage, sumUsage, type UsageTotals } from "../agent/budget";
 import { costSince, type CostTracker } from "../cost";
-import { defaultModelSpec, modelSpecOf, resolveModel } from "../models";
+import { defaultModelSpec, jsonOnlyInstruction, modelSpecOf, resolveModel } from "../models";
 import { estimateCostUsd } from "../pricing";
 import type { RepoContext } from "./collect";
 
@@ -31,6 +31,7 @@ export const SYNTHESIS_INSTRUCTIONS = [
   "Extract ONLY rules that are stated explicitly or are clearly implied by the documents. Never invent rules or apply generic best practices that the documents do not support. If unsure, leave it out or lower the confidence.",
   "Cite the source: `source` is the repo-relative path of the file the rule comes from (exactly as given in the file header).",
   "Each rule must be checkable against a pull request diff or its surrounding code. Write it as a self-contained imperative statement, including the reason or example when the source gives one. Write rules in English even if the source is in another language.",
+  "Copy every file path and file name LITERALLY, including its full extension, from the folder structure and file headers provided (write `seeds.config.json`, never `seeds.config.`). Never abbreviate or guess a path: if you are unsure a file exists, leave it out of `scope`.",
   "`scope` is a list of globs relative to the repo root, as narrow as the source allows (for example `src/**/*.tsx` for React rules). Use ['**'] only for rules that apply everywhere.",
   "`severity`: high = breaks the product, security or explicit hard prohibitions ('never', 'must not'); medium = normal conventions; low = style or preference.",
   "`confidence` in [0,1]: 0.9+ for explicit statements, 0.6-0.8 for clear implications, below 0.5 for guesses.",
@@ -103,7 +104,9 @@ export async function synthesizeRules(
   const result = await generateText({
     model: resolveModel(model, { tracker: costTracker }),
     output: Output.object({ schema: synthesisSchema }),
-    instructions: SYNTHESIS_INSTRUCTIONS,
+    instructions: `${SYNTHESIS_INSTRUCTIONS}
+
+${jsonOnlyInstruction(z.toJSONSchema(synthesisSchema))}`,
     prompt: buildSynthesisPrompt(context),
     abortSignal,
   });
