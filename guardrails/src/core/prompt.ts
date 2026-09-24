@@ -1,4 +1,5 @@
 import type { GuardrailsConfig } from "./config";
+import { formatRulesForPrompt } from "./rules/format";
 import type { ReviewInput } from "./types";
 
 export const STRICTNESS = {
@@ -19,7 +20,7 @@ export function buildSystemPrompt(config: GuardrailsConfig): string {
     "Every finding must point to a line that exists in the new version of the diff.",
     "Give a confidence between 0 and 1. Do not report what you cannot justify from the code shown.",
     config.instructions && `Team instructions:\n${config.instructions}`,
-    rules && `Team rules (report violations with their ruleId):\n${rules}`,
+    rules && `Team rules. Report a violation with its ruleId, and cite the rule id and its source in the finding body:\n${rules}`,
   ]
     .filter(Boolean)
     .join("\n\n");

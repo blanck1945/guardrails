@@ -1,10 +1,16 @@
 import { z } from "zod";
+import { activeRules, mergeRules } from "./rules/merge";
+import { parseRulesMd, type RulesMdError } from "./rules/parse";
 
 export const ruleSchema = z.object({
   id: z.string(),
   rule: z.string(),
   scope: z.array(z.string()).default(["**"]),
   severity: z.enum(["low", "medium", "high"]).default("medium"),
+  /** Where the rule came from: a file path (e.g. "CLAUDE.md") or "user". */
+  source: z.string().optional(),
+  /** Only `active` rules are applied to reviews; `suggested` awaits user approval. */
+  status: z.enum(["active", "suggested", "disabled"]).default("active"),
 });
 
 export const configSchema = z.object({
@@ -83,4 +89,34 @@ export function safeParseConfig(raw: string | null | undefined): SafeConfigResul
 /** Lenient wrapper kept for callers that only need the config. */
 export function parseConfig(raw: string | null | undefined): GuardrailsConfig {
   return safeParseConfig(raw).config;
+}
+
+export interface LoadedRules {
+  config: GuardrailsConfig;
+  /** Every known rule after merging (active, suggested and disabled). */
+  rules: Rule[];
+  /** Rules that apply to reviews (`status: active`). */
+  active: Rule[];
+  configErrors: ConfigError[];
+  rulesErrors: RulesMdError[];
+  /** Text before the first rule in rules.md. */
+  preamble: string;
+}
+
+/**
+ * Loads config.json + rules.md into one rule set. Never throws.
+ * md rules win over config rules with the same id; `disabledRules` and `status: disabled` are honored.
+ */
+export function loadRules(configJson: string | null | undefined, rulesMd: string | null | undefined): LoadedRules {
+  const { config, errors: configErrors } = safeParseConfig(configJson);
+  const md = rulesMd ? parseRulesMd(rulesMd) : { rules: [], errors: [], preamble: "" };
+  const rules = mergeRules(config.rules, md.rules, config.disabledRules);
+  return {
+    config,
+    rules,
+    active: activeRules(rules),
+    configErrors,
+    rulesErrors: md.errors,
+    preamble: md.preamble,
+  };
 }

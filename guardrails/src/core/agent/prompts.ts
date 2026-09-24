@@ -1,4 +1,5 @@
 import type { GuardrailsConfig } from "../config";
+import { formatRulesForPrompt } from "../rules/format";
 import { STRICTNESS } from "../prompt";
 import type { ReviewInput } from "../types";
 import type { AgentBudget } from "./budget";
@@ -24,7 +25,7 @@ export function buildAgentInstructions(config: GuardrailsConfig, budget: AgentBu
     `Only report these comment types: ${config.commentTypes.join(", ")}.`,
     "Give a confidence between 0 and 1.",
     config.instructions && `Team instructions:\n${config.instructions}`,
-    rules && `Team rules (report violations with their ruleId):\n${rules}`,
+    rules && `Team rules. Report a violation with its ruleId, and cite the rule id and its source in the finding body:\n${rules}`,
   ]
     .filter(Boolean)
     .join("\n\n");
