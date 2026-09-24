@@ -15,6 +15,18 @@ export type CheckSpec =
   | { kind: "forbid-import"; pattern: string }
   | { kind: "forbid-pattern"; source: string; flags: string; only?: PatternZone };
 
+/**
+ * How much of a rule a check decides. `exhaustive`: the check fully decides the rule, so the model skips it.
+ * `partial`: the check only catches a subset of violations, so the model still reviews the rule.
+ */
+export type CheckCoverage = "exhaustive" | "partial";
+export const CHECK_COVERAGE_VALUES = ["exhaustive", "partial"] as const;
+
+/** Default coverage per kind: length and test presence are decided completely; imports and patterns are a subset. */
+export function defaultCoverage(spec: CheckSpec): CheckCoverage {
+  return spec.kind === "max-lines" || spec.kind === "colocated-test" ? "exhaustive" : "partial";
+}
+
 export type PatternZone = "comments" | "code" | "strings";
 
 /** Longest regex source accepted for `forbid-pattern`. */

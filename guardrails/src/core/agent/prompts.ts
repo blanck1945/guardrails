@@ -1,5 +1,5 @@
 import type { GuardrailsConfig } from "../config";
-import { formatMechanicalNote, formatRulesForPrompt } from "../rules/format";
+import { formatMechanicalNote, formatRulesForPrompt, type PartialNote } from "../rules/format";
 import { STRICTNESS } from "../prompt";
 import type { ReviewInput } from "../types";
 import type { AgentBudget } from "./budget";
@@ -11,6 +11,8 @@ export type AgentFocus = "general" | "rules-and-logic";
 export interface AgentPromptOptions {
   ruleChecks?: RuleChecksMode | undefined;
   focus?: AgentFocus | undefined;
+  /** Rules whose mechanical check is partial: the model still reviews them, minus the reported locations. */
+  partialChecks?: readonly PartialNote[] | undefined;
 }
 
 /** Exhaustive per-rule pass (B42c): a verdict per rule and file, and EVERY location of a violation. */
@@ -28,7 +30,7 @@ export function ruleChecksInstructions(mode: RuleChecksMode, hasRules: boolean):
 /** Agent prompts are in English (PLAN-DETAILED §3.5). Role: "general" (F1). */
 export function buildAgentInstructions(config: GuardrailsConfig, budget: AgentBudget, mechanical: ReadonlySet<string> = new Set(), opts: AgentPromptOptions = {}): string {
   const rules = formatRulesForPrompt(config.rules, mechanical);
-  const mechanicalNote = formatMechanicalNote(config.rules, mechanical);
+  const mechanicalNote = formatMechanicalNote(config.rules, mechanical, opts.partialChecks);
 
   return [
     "You are part of Guardrails, an automated pull request reviewer.",

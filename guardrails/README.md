@@ -105,8 +105,22 @@ Components stay under 150 lines.
 | `forbid-import: <pattern>` | an ADDED line imports/requires a specifier matching the pattern (glob if it has `* ? { }`, otherwise a substring) |
 | `forbid-pattern: <regex>` | an ADDED line matches the regex (max 200 characters, rejected if unsafe; `/re/i` flags `i` and `u` allowed). `forbid-pattern(comments|code|strings): <regex>` restricts it to that zone of TS/JS/TSX/JSX files |
 
-`exclude:` is a comma-separated list of globs removed from the rule scope. Check findings have confidence 1, the rule's severity and type, and the exact `file:line`; they are never filtered or capped. The model is told these rules are verified mechanically and must not report them again. If the model part of a review fails or times out, the check findings are still published.
-When the agent runs with per-rule verdicts (see review modes), rules with a check are excluded from that pass.
+`exclude:` is a comma-separated list of globs removed from the rule scope. Check findings have confidence 1, the rule's severity and type, and the exact `file:line`; they are never filtered or capped. If the model part of a review fails or times out, the check findings are still published.
+
+**Coverage: exhaustive or partial.** A check either fully decides its rule or only catches a subset of violations, and the model is briefed accordingly:
+
+| Coverage | Kinds by default | What the model is told |
+|---|---|---|
+| `exhaustive` | `max-lines`, `colocated-test` | The rule is verified mechanically: do not check or report it again. It is left out of the per-rule verdict pass. |
+| `partial` | `forbid-import`, `forbid-pattern` | The rule stays in the prompt with the locations the check already reported (do not repeat them), and the model must still look for violations the check cannot see (for example unaccented Spanish text next to an accent regex). It stays in the per-rule verdict pass. |
+
+A model finding that repeats a check finding (same file and rule; for a partial rule also within 3 lines) is dropped as a duplicate; a model finding elsewhere is kept. Override the default per rule with `check-coverage: exhaustive | partial` in the rule header, for example to declare a `forbid-pattern` exhaustive when it really decides the rule (this saves model spend on repos with many pattern rules):
+
+```md
+## no-console
+check: forbid-pattern(code): console\.log
+check-coverage: exhaustive
+```
 Limits of `only`: regex literals are not recognised by the lexer, JSX text between tags counts as code, other file types are skipped. Without a workspace (the cloud single-mode fallback) `max-lines`, `colocated-test` and `only` are skipped and the model handles those rules.
 `guardrails init` proposes a `check:` when a rule allows it and drops an invalid one with a warning.
 

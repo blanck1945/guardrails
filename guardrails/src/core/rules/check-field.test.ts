@@ -53,3 +53,37 @@ describe("rules.md check and exclude", () => {
     expect(formatMechanicalNote(rules, new Set())).toBe("");
   });
 });
+
+describe("rules.md check-coverage", () => {
+  const COV = "## r\nscope: src/**\ncheck: forbid-pattern: [á]\ncheck-coverage: exhaustive\nstatus: active\n\nBody.\n";
+  it("parses the optional field and serializes it back stably", () => {
+    const first = parseRulesMd(COV);
+    expect(first.errors).toEqual([]);
+    expect(first.rules[0]!.checkCoverage).toBe("exhaustive");
+    const text = serializeRulesMd(first.rules);
+    expect(text).toContain("check-coverage: exhaustive");
+    const second = parseRulesMd(text);
+    expect(second.rules).toEqual(first.rules);
+    expect(serializeRulesMd(second.rules)).toBe(text);
+  });
+  it("is absent by default and does not disturb check", () => {
+    const { rules } = parseRulesMd(MD);
+    expect(rules[0]!.checkCoverage).toBeUndefined();
+    expect(rules[0]!.check).toBe("max-lines: 150");
+    expect(serializeRulesMd(rules)).not.toContain("check-coverage");
+  });
+  it("an invalid value is reported and dropped, the rule stays", () => {
+    const { rules, errors } = parseRulesMd("## r\ncheck: max-lines: 5\ncheck-coverage: maybe\nstatus: active\n\nBody.\n");
+    expect(rules[0]).toMatchObject({ id: "r", check: "max-lines: 5" });
+    expect(rules[0]!.checkCoverage).toBeUndefined();
+    expect(errors[0]).toMatchObject({ id: "r", line: 3 });
+    expect(errors[0]!.message).toContain("check-coverage");
+  });
+  it("the prompt note lists partial rules with their locations", () => {
+    const rules = parseRulesMd(COV).rules;
+    const note = formatMechanicalNote(rules, new Set(), [{ ruleId: "r", locations: [{ file: "a.ts", line: 3 }] }]);
+    expect(note).toContain("[r]: already reported at a.ts:3");
+    expect(formatMechanicalNote(rules, new Set(), [{ ruleId: "r", locations: [] }])).toContain("the check found nothing");
+    expect(formatRulesForPrompt(rules, new Set())).toContain("[r]");
+  });
+});

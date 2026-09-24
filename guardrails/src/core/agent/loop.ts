@@ -15,6 +15,7 @@ import {
   type UsageTotals,
 } from "./budget";
 import { buildAgentInstructions, buildAgentPrompt, WRAP_UP_MESSAGE, type AgentFocus, type RuleChecksMode } from "./prompts";
+import type { PartialNote } from "../rules/format";
 import { createReportTool, createWorkspaceTools, REPORT_TOOL, type Report } from "./tools";
 
 export interface AgentRunOptions {
@@ -27,6 +28,8 @@ export interface AgentRunOptions {
   costTracker?: CostTracker | undefined;
   /** Rules whose mechanical check already ran: listed to the model as "do not report". */
   mechanicalRuleIds?: ReadonlySet<string> | undefined;
+  /** Rules whose check is partial: still reviewed by the model, told which locations the check already reported. */
+  partialChecks?: readonly PartialNote[] | undefined;
   /** Temperature preferred by the review mode (`GUARDRAILS_TEMPERATURE` overrides it). */
   temperature?: number | undefined;
   /** `require`: a report that omits verdicts for rules in scope is bounced once (deep mode). Default `ask`. */
@@ -108,7 +111,7 @@ export async function runReviewAgent(opts: AgentRunOptions): Promise<AgentRunRes
 
   const result = await generateText({
     model: resolveModel(opts.model, { tracker: opts.costTracker }),
-    instructions: buildAgentInstructions(opts.config, budget, opts.mechanicalRuleIds, { ruleChecks: ruleChecksMode, focus: opts.focus }),
+    instructions: buildAgentInstructions(opts.config, budget, opts.mechanicalRuleIds, { ruleChecks: ruleChecksMode, focus: opts.focus, partialChecks: opts.partialChecks }),
     prompt: buildAgentPrompt(opts.input, diff),
     tools,
     // The model must always call a tool; the only way to finish is report_findings.

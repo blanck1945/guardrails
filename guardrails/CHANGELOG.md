@@ -3,6 +3,32 @@
 Each version has three parts: what we did, what we observed when we measured it, and what that made us do next.
 The "Next" of a version is the "What we did" of the following one. Newest first. See `CLAUDE.md` for the convention.
 
+## v0.7.1 — 2026-09-25
+### What we did
+- Fix for the loss found in the v0.7.0 measurement: a partial mechanical check no longer silences the model. Checks now have a coverage. `exhaustive` (default for `max-lines`, `colocated-test`) fully decides the rule, so the model is told to skip it, as before. `partial` (default for `forbid-import`, `forbid-pattern`) only catches a subset of violations, so the rule stays in the model prompt (single and agent) and in the per-rule verdict pass, together with the locations the check already reported ("do not repeat these, but still look for violations the check cannot see").
+- Dedupe: a model finding that repeats a check finding is still dropped. For an exhaustive rule the match is the same file and rule (unchanged); for a partial rule it must also be within 3 lines of a check finding, so a finding elsewhere in the same file is kept.
+- Optional `check-coverage: exhaustive | partial` in the rule header of `rules.md` overrides the default of the check kind (for example to declare a `forbid-pattern` exhaustive when it really decides the rule and save model spend). Parse and serialize round-trip is stable; an invalid value is reported and dropped, the rule is kept.
+- `runChecks` now returns `exhaustive` and `partial` (with reported locations) next to `ran`. Tests use mock models only (defaults per kind, override both ways, prompts of both engines, kept and dropped findings, round-trip). README documents the coverage table.
+
+### What we observed
+Real verification, one run per branch (local CLI, `zai:glm-5.3`, temperature 0, `--mode standard`, `--budget-usd 0.05`). Setup as in v0.7.0: a temporary clone of `blanck1945/causas-viewer` (never pushed), base branch = `origin/main` plus the same four `check:` lines, each feature branch rebased onto it and checked out.
+
+| Branch | Findings (file:line, rule, origin) | Cost | Time | Steps |
+|---|---|---|---|---|
+| case-reminders | useReminders.ts:20 english-code-spanish-ui (check); ReminderList.tsx:11 english-code-spanish-ui (model, conf 0.95, "Hardcoded Spanish UI heading Recordatorios"); useReminders.ts:21 deadline-logic-centralized (model, conf 0.95) | 0.0181 | 28 s | 2 |
+| clients-page (clean) | none | 0.0109 | 19 s | 2 |
+
+- Both expectations met: the accented comment comes from the check, the unaccented heading `Recordatorios` that v0.7.0 missed in every mode is reported again (by the model), and the clean branch has no findings. 0 findings dropped in both runs.
+- Cost against the v0.7.0 standard runs: case-reminders 0.0181 against 0.0117 and 0.0071; clients-page 0.0109 against 0.0147. The partial rule is back in the model prompt, which explains the higher case-reminders cost; clients-page was slightly cheaper. Two runs are too few to call a trend. Total real spend of this verification: about US$0.029.
+- The pre-run estimate printed by the CLI (about US$0.17 per run) overstates the real cost roughly 10 times for this small PR, because it assumes the PLAN section 9 profile of 273k input tokens.
+- One run per branch: whether the heading is found on every run was not measured.
+
+### Next (v0.7.2)
+- Make `LocalWorkspace` read head files from the head revision (`git show`) instead of the working tree.
+- Judge the extra low-confidence findings of `deep` (are they noise?) and, if so, raise its confidence floor or require them to cite evidence lines.
+- Make the CLI dry-run estimate use the size of the actual diff instead of the fixed PLAN section 9 profile.
+- Repeat the case-reminders run a few times per mode to see how stable the model finding on the unaccented heading is.
+
 ## v0.7.0 — 2026-09-25
 ### What we did
 - B43: three review modes per PR, presets in `src/core/modes.ts`: `basic` (4 steps, US$0.05, confidence 0.8, cap 3, no per-rule verdicts), `standard` (12 steps, US$0.25, confidence 0.6, cap 5, verdicts asked; it keeps following `config.strictness`), `deep` (24 steps, US$0.75, confidence 0.4, cap 12, verdicts required, 2 passes). Mechanical checks run in every mode and are never capped.

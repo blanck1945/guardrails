@@ -1,6 +1,6 @@
 import { generateText, Output, type LanguageModel } from "ai";
 import { BudgetExceededError, costSince, type CostTracker } from "./cost";
-import { runChecks, type CheckSkip } from "./checks";
+import { runChecks, type CheckSkip, type PartialCheck } from "./checks";
 import { parseUnifiedDiff } from "./diff";
 import { defaultModelSpec, jsonOnlyInstruction, modelSpecOf, resolveModel } from "./models";
 import { estimateCostUsd } from "./pricing";
@@ -26,6 +26,9 @@ const REVIEW_EXAMPLE = {
     { file: "src/a.ts", line: 12, type: "logic", severity: "medium", confidence: 0.8, title: "Short title", body: "What is wrong and why.", ruleId: "optional-rule-id" },
   ],
 };
+
+/** A model finding this close (in lines) to a check finding of the same partial rule and file is a repeat. */
+const NEARBY_LINES = 3;
 
 const MIN_CONFIDENCE = { 1: 0.8, 2: 0.6, 3: 0.4 } as const;
 
@@ -138,17 +141,36 @@ export async function reviewDiff(
   const checkOutcome = await runChecks({ rules: config.rules, files: parseUnifiedDiff(input.diff), workspace }).catch(() => ({
     findings: [] as Finding[],
     ran: [] as string[],
+    exhaustive: [] as string[],
+    partial: [] as PartialCheck[],
     skipped: [] as CheckSkip[],
   }));
-  const mechanical = new Set(checkOutcome.ran);
+  // Only exhaustive checks silence the model; a partial check leaves its rule to the model (minus the reported locations).
+  const mechanical = new Set(checkOutcome.exhaustive);
+  const partialChecks = checkOutcome.partial;
+  const partialIds = new Set(partialChecks.map((p) => p.ruleId));
   const checkFindings = checkOutcome.findings;
   const checkKeys = new Set(checkFindings.map((f) => `${f.file}\0${f.ruleId}`));
+  const partialLines = new Map<string, number[]>();
+  for (const f of checkFindings) {
+    if (!f.ruleId || !partialIds.has(f.ruleId)) continue;
+    const key = `${f.file}\0${f.ruleId}`;
+    partialLines.set(key, [...(partialLines.get(key) ?? []), f.line]);
+  }
+  /** A model finding repeats a check finding: same file and rule; for a partial rule also the same or a nearby line. */
+  const repeatsCheck = (f: Finding): boolean => {
+    if (!f.ruleId) return false;
+    const key = `${f.file}\0${f.ruleId}`;
+    if (!checkKeys.has(key)) return false;
+    const lines = partialLines.get(key);
+    return lines ? lines.some((l) => Math.abs(l - f.line) <= NEARBY_LINES) : true;
+  };
 
   // Deterministic grounding: drop findings that claim a file is absent when the head tree has it.
   const verify = async (all: Finding[]) => {
     const tagged = all.map((f): Finding => ({ ...f, origin: "llm" }));
     // A model finding that repeats a mechanical check (same file, same rule) is noise.
-    const fs = tagged.filter((f) => !(f.ruleId && checkKeys.has(`${f.file}\0${f.ruleId}`)));
+    const fs = tagged.filter((f) => !repeatsCheck(f));
     const repeated = tagged.filter((f) => !fs.includes(f));
     const { findings, dropped } = filterFindings(fs);
     dropped.push(...repeated.map((finding) => ({ finding, reason: "duplicate" as const })));
@@ -191,6 +213,7 @@ export async function reviewDiff(
           abortSignal,
           costTracker,
           mechanicalRuleIds: mechanical,
+          partialChecks,
           temperature,
           ruleChecks,
           focus,
@@ -212,7 +235,7 @@ export async function reviewDiff(
     const result = await generateText({
       model: resolveModel(model, { tracker: costTracker }),
       output: Output.object({ schema: reviewResultSchema }),
-      instructions: `${buildSystemPrompt(runConfig, mechanical)}
+      instructions: `${buildSystemPrompt(runConfig, mechanical, partialChecks)}
 
 ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
       prompt: buildUserPrompt(input),

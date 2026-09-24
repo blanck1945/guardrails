@@ -1,5 +1,5 @@
 import type { Rule } from "../config";
-import { parseCheck } from "../checks/spec";
+import { CHECK_COVERAGE_VALUES, parseCheck } from "../checks/spec";
 
 export type RuleStatus = Rule["status"];
 export type RuleSeverity = Rule["severity"];
@@ -20,7 +20,7 @@ export interface ParsedRulesMd {
 }
 
 const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const HEADER_LINE = /^(scope|severity|source|status|type|check|exclude)\s*:\s*(.*)$/i;
+const HEADER_LINE = /^(scope|severity|source|status|type|check-coverage|check|exclude)\s*:\s*(.*)$/i;
 const FENCE = /^\s{0,3}(```+|~~~+)/;
 const SEVERITIES = ["low", "medium", "high"] as const;
 const TYPES = ["logic", "security", "syntax", "style"] as const;
@@ -48,7 +48,7 @@ export function splitGlobs(value: string): string[] {
  * (with its line number) and skipped; the others are kept.
  *
  * Format: one block per rule, `## <kebab-id>`, then optional `key: value` lines
- * (scope, severity, type, source, status, and the optional `check`, `exclude`), a blank line, then the free-form natural-language body.
+ * (scope, severity, type, source, status, and the optional `check`, `check-coverage`, `exclude`), a blank line, then the free-form natural-language body.
  * `## ` lines inside fenced code blocks are part of the body.
  */
 export function parseRulesMd(text: string): ParsedRulesMd {
@@ -138,6 +138,11 @@ export function parseRulesMd(text: string): ParsedRulesMd {
       if (c.ok) rule.check = meta.check.value.trim();
       else err(`invalid check: ${c.error} (the rule is kept without its check)`, meta.check.line);
     }
+    if (meta["check-coverage"]) {
+      const v = meta["check-coverage"].value.toLowerCase();
+      if ((CHECK_COVERAGE_VALUES as readonly string[]).includes(v)) rule.checkCoverage = v as NonNullable<Rule["checkCoverage"]>;
+      else err(`invalid check-coverage "${meta["check-coverage"].value}" (expected exhaustive or partial; the default of the check kind applies)`, meta["check-coverage"].line);
+    }
     seen.add(id);
     rules.push(rule);
   }
@@ -154,6 +159,7 @@ export function serializeRulesMd(rules: readonly Rule[], opts: { preamble?: stri
     const head = [`## ${r.id}`, `scope: ${(r.scope.length ? r.scope : ["**"]).join(", ")}`, `severity: ${r.severity}`];
     if (r.type) head.push(`type: ${r.type}`);
     if (r.check) head.push(`check: ${r.check}`);
+    if (r.checkCoverage) head.push(`check-coverage: ${r.checkCoverage}`);
     if (r.exclude?.length) head.push(`exclude: ${r.exclude.join(", ")}`);
     if (r.source) head.push(`source: ${r.source}`);
     head.push(`status: ${r.status}`);

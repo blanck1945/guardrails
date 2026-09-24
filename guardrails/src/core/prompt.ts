@@ -1,5 +1,5 @@
 import type { GuardrailsConfig } from "./config";
-import { formatMechanicalNote, formatRulesForPrompt } from "./rules/format";
+import { formatMechanicalNote, formatRulesForPrompt, type PartialNote } from "./rules/format";
 import type { ReviewInput } from "./types";
 
 export const STRICTNESS = {
@@ -8,9 +8,9 @@ export const STRICTNESS = {
   3: "Be thorough. Report bugs, risks and smaller issues.",
 } as const;
 
-export function buildSystemPrompt(config: GuardrailsConfig, mechanical: ReadonlySet<string> = new Set()): string {
+export function buildSystemPrompt(config: GuardrailsConfig, mechanical: ReadonlySet<string> = new Set(), partial: readonly PartialNote[] = []): string {
   const rules = formatRulesForPrompt(config.rules, mechanical);
-  const mechanicalNote = formatMechanicalNote(config.rules, mechanical);
+  const mechanicalNote = formatMechanicalNote(config.rules, mechanical, partial);
 
   return [
     "You are a senior code reviewer. Review the pull request diff with the repository context provided.",

@@ -17,6 +17,11 @@ export const ruleSchema = z.object({
    * `forbid-pattern: <regex>` (optionally `forbid-pattern(comments|code|strings): <regex>`). Verified without a model.
    */
   check: z.string().optional(),
+  /**
+   * Whether the `check` fully decides the rule (`exhaustive`: the model skips the rule) or only catches a subset of
+   * violations (`partial`: the model still reviews it). Default comes from the check kind (see `defaultCoverage`).
+   */
+  checkCoverage: z.enum(["exhaustive", "partial"]).optional(),
   /** Globs excluded from the rule scope (used by `check`; the model is also told to skip them). */
   exclude: z.array(z.string()).optional(),
   /** Where the rule came from: a file path (e.g. "CLAUDE.md") or "user". */

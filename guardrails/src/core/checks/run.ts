@@ -7,7 +7,7 @@ import type { Finding } from "../types";
 import type { Workspace } from "../workspace";
 import { LEXABLE, maskLines, type Zone } from "./lexer";
 import { hasLogic } from "./logic";
-import { parseCheck } from "./spec";
+import { defaultCoverage, parseCheck } from "./spec";
 
 /** A rule's check that could not run, with a stable reason. */
 export interface CheckSkip {
@@ -15,11 +15,22 @@ export interface CheckSkip {
   reason: "invalid-check" | "needs-workspace" | "read-failed";
 }
 
+/** A rule whose check ran but only catches a subset of violations: the model still reviews it. */
+export interface PartialCheck {
+  ruleId: string;
+  /** Locations the check already reported (capped like the findings), so the model does not repeat them. */
+  locations: { file: string; line: number }[];
+}
+
 export interface CheckOutcome {
   /** Findings with `origin: "check"`, confidence 1, sorted by file, line, rule. */
   findings: Finding[];
-  /** Ids of the rules whose check ran completely (the model is told not to re-check these). */
+  /** Ids of the rules whose check ran completely (exhaustive ones are skipped by the model, partial ones are not). */
   ran: string[];
+  /** Subset of `ran` with exhaustive coverage: the model is told not to review these rules. */
+  exhaustive: string[];
+  /** Subset of `ran` with partial coverage: the model still reviews these rules, minus the listed locations. */
+  partial: PartialCheck[];
   skipped: CheckSkip[];
 }
 
@@ -84,6 +95,8 @@ export function importMatches(pattern: string, specifier: string): boolean {
 export async function runChecks({ rules, files, workspace }: RunChecksInput): Promise<CheckOutcome> {
   const findings: Finding[] = [];
   const ran: string[] = [];
+  const exhaustive: string[] = [];
+  const partial: PartialCheck[] = [];
   const skipped: CheckSkip[] = [];
   const live = files.filter((f) => f.status !== "deleted" && !f.binary);
   let tree: Set<string> | undefined;
@@ -204,10 +217,14 @@ export async function runChecks({ rules, files, workspace }: RunChecksInput): Pr
     }
 
     if (readFailed) skipped.push({ ruleId: rule.id, reason: "read-failed" });
-    else ran.push(rule.id);
+    else {
+      ran.push(rule.id);
+      if ((rule.checkCoverage ?? defaultCoverage(spec)) === "exhaustive") exhaustive.push(rule.id);
+      else partial.push({ ruleId: rule.id, locations: out.slice(0, MAX_FINDINGS_PER_RULE).map((f) => ({ file: f.file, line: f.line })) });
+    }
     findings.push(...out.slice(0, MAX_FINDINGS_PER_RULE));
   }
 
   findings.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.line - b.line || (a.ruleId ?? "").localeCompare(b.ruleId ?? "")));
-  return { findings, ran, skipped };
+  return { findings, ran, exhaustive, partial, skipped };
 }
