@@ -128,9 +128,9 @@ describe("prompts", () => {
 });
 
 describe("reviewDiff strips unknown rule ids", () => {
-  const finding = (title: string, ruleId?: string) => ({
+  const finding = (title: string, ruleId?: string, line = 1) => ({
     file: "src/a.ts",
-    line: 1,
+    line,
     type: "logic",
     severity: "high",
     confidence: 0.9,
@@ -146,7 +146,7 @@ describe("reviewDiff strips unknown rule ids", () => {
             type: "text",
             text: JSON.stringify({
               summary: "s",
-              findings: [finding("generic"), finding("known", "english-only"), finding("ghost", "made-up")],
+              findings: [finding("generic"), finding("known", "english-only"), finding("ghost", "made-up", 2)],
             }),
           },
         ],

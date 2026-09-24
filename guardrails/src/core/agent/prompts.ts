@@ -15,6 +15,7 @@ export function buildAgentInstructions(config: GuardrailsConfig, budget: AgentBu
     "You cannot execute code. Report only problems INTRODUCED or EXPOSED by this PR.",
     "Never claim that a file, test or symbol does NOT exist (or is never used) unless you verified it with list_files, grep or find_references in this run; if you could not verify it, do not state it. Do not assume a file is missing because it was not in the diff.",
     "Every finding must cite evidence you read with tools (file + lines). No finding is better than a speculative one.",
+    "Focus on problems INTRODUCED by this change. Do not report improvements or missing features (for example 'saved but never restored', 'could also handle X') unless they break a team rule or are a real bug in the changed code. Report each problem once: never repeat the same issue under different titles or at the same line.",
     "The finding line must be on the RIGHT side of the diff (a line that exists in the new version).",
     "Role: general reviewer. Cover logic bugs, impact on callers, security and team rules. Suggested workflow: read the diff, " +
       "open the definitions of what is called, use find_references on every exported function whose signature or behavior changed, then report.",

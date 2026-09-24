@@ -202,3 +202,22 @@ describe("reviewDiff absence-claim verification", () => {
     expect(r.dropped.map((d) => d.reason)).toEqual(["contradicted-by-repo"]);
   });
 });
+
+describe("reviewDiff noise limits", () => {
+  it("caps by strictness, records over-cap drops and mentions them in the summary", async () => {
+    const many = Array.from({ length: 6 }, (_, i) => ({ ...validFinding, line: 10 + i, title: `Problem ${i}`, confidence: 0.9 - i * 0.05 }));
+    const model = scripted(() => call("report_findings", { findings: many }, "r"));
+    const r = await reviewDiff(input, { config: { ...defaultConfig, strictness: 2 }, model, mode: "agent", workspace: ws });
+    expect(r.findings).toHaveLength(5);
+    expect(r.dropped.map((d) => d.reason)).toEqual(["over-cap"]);
+    expect(r.summary).toContain("1 lower-priority finding(s) omitted");
+  });
+
+  it("keeps at most 2 findings on the same line", async () => {
+    const same = [0, 1, 2].map((i) => ({ ...validFinding, title: `Different title ${i}`, confidence: 0.9 - i * 0.1 }));
+    const model = scripted(() => call("report_findings", { findings: same }, "r"));
+    const r = await reviewDiff(input, { config: defaultConfig, model, mode: "agent", workspace: ws });
+    expect(r.findings).toHaveLength(2);
+    expect(r.dropped.map((d) => d.reason)).toEqual(["duplicate"]);
+  });
+});

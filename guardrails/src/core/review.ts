@@ -5,6 +5,7 @@ import { estimateCostUsd } from "./pricing";
 import { runReviewAgent } from "./agent/loop";
 import { emptyUsage, sumUsage, type UsageTotals } from "./agent/budget";
 import type { GuardrailsConfig } from "./config";
+import { capFindings, capFor, collapseByLocation } from "./findings/limits";
 import { verifyAbsenceClaims } from "./findings/verify";
 import { stripUnknownRuleIds } from "./rules/select";
 import { buildSystemPrompt, buildUserPrompt } from "./prompt";
@@ -46,7 +47,7 @@ export interface ReviewOutput {
   incomplete?: boolean;
   notes?: string | undefined;
   /** Findings the model reported but that were filtered out, with the reason. */
-  dropped: { finding: Finding; reason: "low-confidence" | "comment-type-disabled" | "contradicted-by-repo" }[];
+  dropped: { finding: Finding; reason: "low-confidence" | "comment-type-disabled" | "contradicted-by-repo" | "duplicate" | "over-cap" }[];
 }
 
 /**
@@ -89,17 +90,28 @@ export async function reviewDiff(
   // Deterministic grounding: drop findings that claim a file is absent when the head tree has it.
   const verify = async (fs: Finding[]) => {
     const { findings, dropped } = filterFindings(fs);
-    if (!workspace) return { findings, dropped };
-    const v = await verifyAbsenceClaims(findings, workspace);
-    return { findings: v.kept, dropped: [...dropped, ...v.contradicted.map((c) => ({ finding: c.finding, reason: "contradicted-by-repo" as const }))] };
+    let kept = findings;
+    if (workspace) {
+      const v = await verifyAbsenceClaims(kept, workspace);
+      kept = v.kept;
+      dropped.push(...v.contradicted.map((c) => ({ finding: c.finding, reason: "contradicted-by-repo" as const })));
+    }
+    // Less noise per change: collapse findings piled on one line, then cap the total by strictness.
+    const collapsed = collapseByLocation(kept, config.rules);
+    const capped = capFindings(collapsed.kept, config.rules, capFor(config.strictness));
+    dropped.push(...collapsed.dropped, ...capped.dropped);
+    const omitted = capped.dropped.length;
+    return { findings: capped.kept, dropped, omitted };
   };
+  const withOmitted = (summary: string, omitted: number) =>
+    omitted ? `${summary}${summary ? " " : ""}(${omitted} lower-priority finding(s) omitted: over the review cap.)` : summary;
 
   if (mode === "agent") {
     if (!workspace) throw new Error("reviewDiff: mode 'agent' requires a workspace");
     const run = await runReviewAgent({ model, config, workspace, input, abortSignal, costTracker });
-    const { findings, dropped } = await verify(run.findings);
+    const { findings, dropped, omitted } = await verify(run.findings);
     return {
-      summary: run.notes ?? "",
+      summary: withOmitted(run.notes ?? "", omitted),
       findings,
       dropped,
       mode,
@@ -121,9 +133,9 @@ ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
   });
 
   const usage = result.steps.length ? sumUsage(result.steps.map((s) => s.usage)) : emptyUsage();
-  const { findings, dropped } = await verify(result.output.findings);
+  const { findings, dropped, omitted } = await verify(result.output.findings);
   return {
-    summary: result.output.summary,
+    summary: withOmitted(result.output.summary, omitted),
     findings,
     dropped,
     mode,
