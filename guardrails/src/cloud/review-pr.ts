@@ -4,15 +4,23 @@ import { DEFAULT_IGNORES, isIgnored } from "@/core/paths";
 import { installationOctokit } from "./github";
 import { loadReviewRules, ruleCitation, rulesChangeNote, rulesForPr } from "./review-rules";
 
-export interface PullRequestEvent {
-  installationId: number;
-  owner: string;
-  repo: string;
-  number: number;
-  headSha: string;
-}
+import { BudgetExceededError } from "@/core/cost";
+import { configSchema } from "@/core/config";
+import { CONFIG_PATH } from "./review-rules";
+import type { PullRequestEvent, Triggers } from "./webhook";
 
-const MAX_DIFF_CHARS = 200_000;
+export const MAX_DIFF_CHARS = 200_000;
+
+/** The PR is bigger than what the MVP reviews in one call. */
+export class DiffTooLargeError extends Error {
+  constructor(
+    readonly chars: number,
+    readonly max: number,
+  ) {
+    super(`diff too large: ${chars} characters (limit ${max})`);
+    this.name = "DiffTooLargeError";
+  }
+}
 const DOC_PATHS = ["CONTRIBUTING.md", "README.md"];
 const SEVERITY_ICON = { low: "🟢", medium: "🟡", high: "🔴" } as const;
 
@@ -127,5 +135,53 @@ export async function reviewPullRequest(ev: PullRequestEvent) {
         `${SEVERITY_ICON[f.severity]} **${f.title}**\n\n${f.body}${citation(f, rules)}` +
         (f.suggestion ? `\n\n\`\`\`suggestion\n${f.suggestion}\n\`\`\`` : ""),
     })),
+  });
+}
+
+/** `config.triggers` from the PR's base commit (defaults when the file is missing or invalid). */
+export async function loadTriggersFromBase(ev: PullRequestEvent): Promise<Triggers> {
+  const octo = await installationOctokit(ev.installationId);
+  const raw = await readFile(octo, ev.owner, ev.repo, CONFIG_PATH, ev.baseSha);
+  let triggers: unknown;
+  try {
+    triggers = raw ? (JSON.parse(raw) as { triggers?: unknown }).triggers : undefined;
+  } catch {
+    triggers = undefined;
+  }
+  const parsed = configSchema.shape.triggers.safeParse(triggers);
+  return parsed.success ? parsed.data : configSchema.shape.triggers.parse(undefined);
+}
+
+export type FailureKind = "diff-too-large" | "rate-limit" | "budget" | "other";
+
+export function classifyFailure(err: unknown): FailureKind {
+  if (err instanceof DiffTooLargeError) return "diff-too-large";
+  if (err instanceof BudgetExceededError) return "budget";
+  const e = err as { status?: number; statusCode?: number; response?: { headers?: Record<string, string> } } | null;
+  const status = e?.status ?? e?.statusCode;
+  if (status === 429) return "rate-limit";
+  if (status === 403 && e?.response?.headers?.["x-ratelimit-remaining"] === "0") return "rate-limit";
+  return "other";
+}
+
+/** Fixed, generic wording: never includes error messages, paths, keys or any other internal detail. */
+export const FAILURE_MESSAGES: Record<Exclude<FailureKind, "other">, string> = {
+  "diff-too-large": `**Guardrails** skipped this pull request: the change is too large for one review (limit: ${MAX_DIFF_CHARS.toLocaleString("en-US")} characters of diff). Split it into smaller pull requests, or add \`skip-guardrails\` to opt out.`,
+  "rate-limit": "**Guardrails** could not review this pull request: a rate limit was hit. Push a new commit to try again.",
+  budget: "**Guardrails** stopped this review because it reached its spend limit. Push a new commit to try again.",
+};
+
+/** Posts a short notice for known limit failures. Other failures are only logged (no noise on transient errors). */
+export async function reportReviewFailure(ev: PullRequestEvent, err: unknown): Promise<void> {
+  const kind = classifyFailure(err);
+  if (kind === "other") return;
+  const octo = await installationOctokit(ev.installationId);
+  await octo.rest.pulls.createReview({
+    owner: ev.owner,
+    repo: ev.repo,
+    pull_number: ev.number,
+    commit_id: ev.headSha,
+    event: "COMMENT",
+    body: FAILURE_MESSAGES[kind],
   });
 }

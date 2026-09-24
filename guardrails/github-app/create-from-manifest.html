@@ -1,0 +1,35 @@
+<!doctype html>
+<!--
+  Helper for the GitHub App Manifest flow (see docs/github-app-setup.md, option B).
+  Open this file in a browser, paste the edited contents of manifest.json, click the button.
+  It only posts to github.com; nothing is stored or sent anywhere else.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Create the Guardrails GitHub App</title>
+  </head>
+  <body>
+    <h1>Create the Guardrails GitHub App</h1>
+    <p>Paste the contents of <code>manifest.json</code> (with your domain in place of the placeholders):</p>
+    <form action="https://github.com/settings/apps/new" method="post">
+      <textarea id="manifest" rows="24" cols="90" spellcheck="false"></textarea>
+      <input type="hidden" name="manifest" id="manifest-field" />
+      <p><button type="submit">Create GitHub App on github.com</button></p>
+    </form>
+    <p>To create it under an organization, change the form action to <code>https://github.com/organizations/ORG/settings/apps/new</code>.</p>
+    <script>
+      document.querySelector("form").addEventListener("submit", (e) => {
+        const text = document.getElementById("manifest").value;
+        try {
+          JSON.parse(text);
+        } catch (err) {
+          e.preventDefault();
+          alert("The manifest is not valid JSON: " + err.message);
+          return;
+        }
+        document.getElementById("manifest-field").value = text;
+      });
+    </script>
+  </body>
+</html>

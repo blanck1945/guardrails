@@ -1,0 +1,16 @@
+{
+  "action": "opened",
+  "number": 7,
+  "pull_request": {
+    "number": 7,
+    "state": "open",
+    "draft": false,
+    "labels": [],
+    "user": { "login": "octocat", "type": "User" },
+    "head": { "sha": "1111111111111111111111111111111111111111", "ref": "feature", "repo": { "full_name": "acme/widgets", "fork": false } },
+    "base": { "sha": "2222222222222222222222222222222222222222", "ref": "main", "repo": { "full_name": "acme/widgets" } }
+  },
+  "repository": { "name": "widgets", "full_name": "acme/widgets", "owner": { "login": "acme" } },
+  "installation": { "id": 424242 },
+  "sender": { "login": "octocat", "type": "User" }
+}

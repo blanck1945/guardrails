@@ -1,0 +1,17 @@
+{
+  "name": "Guardrails Review (CHANGE-ME: app names are globally unique)",
+  "url": "https://github.com/blanck1945/guardrails",
+  "description": "Reviews pull requests against the team's written rules and comments on problems.",
+  "hook_attributes": {
+    "url": "https://REPLACE-WITH-YOUR-DOMAIN/api/webhooks/github",
+    "active": true
+  },
+  "redirect_url": "https://REPLACE-WITH-YOUR-DOMAIN/",
+  "public": false,
+  "default_permissions": {
+    "metadata": "read",
+    "contents": "read",
+    "pull_requests": "write"
+  },
+  "default_events": ["pull_request"]
+}
