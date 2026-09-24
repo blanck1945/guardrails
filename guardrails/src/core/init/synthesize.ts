@@ -36,13 +36,15 @@ export const candidateSchema = z.object({
   source: z.string().describe("Repo-relative path of the file the rule comes from"),
   confidence: z.number().min(0).max(1),
   kind: z.enum(candidateKinds),
+  check: z.string().optional().describe("Optional mechanical check, one line: `max-lines: N`, `colocated-test`, `forbid-import: <glob or substring>` or `forbid-pattern: <regex>`"),
+  exclude: z.array(z.string()).optional().describe("Globs excluded from the scope of the check"),
 });
 
 export const synthesisSchema = z.object({ rules: z.array(candidateSchema) });
 
 const SYNTHESIS_EXAMPLE = {
   rules: [
-    { id: "kebab-case-id", rule: "Imperative sentence.", scope: ["src/**"], severity: "medium", type: "style", source: "CLAUDE.md", confidence: 0.9, kind: "diff-checkable" },
+    { id: "kebab-case-id", rule: "Imperative sentence.", scope: ["src/**"], severity: "medium", type: "style", source: "CLAUDE.md", confidence: 0.9, kind: "diff-checkable", check: "max-lines: 150", exclude: ["**/*.test.ts"] },
   ],
 };
 
@@ -60,6 +62,7 @@ export const synthesisInstructions = (maxRules: number): string => [
   "`type`: the kind of finding a violation is. 'style' = conventions, architecture and layering, naming, file structure, comments, language, tests-next-to-code; 'security' = real security problems (secrets, injection, auth, unsafe data handling); 'logic' = wrong behavior or business-logic rules (deadlines, calculations, invariants); 'syntax' = language-level or tooling correctness. When in doubt use 'style'.",
   "`confidence` in [0,1]: 0.9+ for explicit statements, 0.6-0.8 for clear implications, below 0.5 for guesses.",
   "`kind`: 'diff-checkable' = a reviewer can verify it by reading a diff; 'context-only' = useful background that is hard to verify from a diff (architecture notes, process); 'tool-enforced' = a linter, type checker or CI job that the repo actually runs already enforces it (for example a compiler flag or lint rule that CI executes). If a lint or compiler setting exists but nothing shows CI or a hook runs it, use 'diff-checkable' with lower confidence instead.",
+  "`check` (optional, ONLY when the rule can be verified mechanically and exactly): `max-lines: N` for a file length limit (\"files under 150 lines\" -> `max-lines: 150`); `colocated-test` when every module must have a test file next to it; `forbid-import: <glob or substring>` when a layer must not import another (\"components must not import the repository\"); `forbid-pattern: <regex>` for text that must never appear on added lines. One line, exact syntax, nothing else. Omit `check` for anything that needs judgment. `exclude` lists globs (tests, generated code, translation files) the check must skip.",
   "Keep each `rule` to one or two short sentences (about 250 characters at most): state the requirement and, if essential, one reason. No long examples.",
   "Prefer fewer, high-quality rules over many marginal ones; at most " + maxRules + ", keeping the most important ones. Merge near-duplicates. Give each rule a distinct kebab-case `id`.",
   "Do not deliberate at length: skim the documents once, pick the rules, and write the answer.",
@@ -105,6 +108,8 @@ export function normalizeCandidates(raw: readonly CandidateRule[]): CandidateRul
       source: c.source.trim() || "unknown",
       confidence: Math.min(1, Math.max(0, c.confidence)),
       kind: c.kind,
+      ...(c.check?.trim() ? { check: c.check.trim() } : {}),
+      ...(c.exclude?.length ? { exclude: c.exclude } : {}),
     });
   }
   // Stable sort: equal confidences keep the model's order.

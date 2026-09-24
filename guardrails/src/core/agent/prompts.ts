@@ -1,12 +1,13 @@
 import type { GuardrailsConfig } from "../config";
-import { formatRulesForPrompt } from "../rules/format";
+import { formatMechanicalNote, formatRulesForPrompt } from "../rules/format";
 import { STRICTNESS } from "../prompt";
 import type { ReviewInput } from "../types";
 import type { AgentBudget } from "./budget";
 
 /** Agent prompts are in English (PLAN-DETAILED §3.5). Role: "general" (F1). */
-export function buildAgentInstructions(config: GuardrailsConfig, budget: AgentBudget): string {
-  const rules = formatRulesForPrompt(config.rules);
+export function buildAgentInstructions(config: GuardrailsConfig, budget: AgentBudget, mechanical: ReadonlySet<string> = new Set()): string {
+  const rules = formatRulesForPrompt(config.rules, mechanical);
+  const mechanicalNote = formatMechanicalNote(config.rules, mechanical);
 
   return [
     "You are part of Guardrails, an automated pull request reviewer.",
@@ -26,6 +27,7 @@ export function buildAgentInstructions(config: GuardrailsConfig, budget: AgentBu
     "Give a confidence between 0 and 1.",
     config.instructions && `Team instructions:\n${config.instructions}`,
     rules && `Team rules. Whenever a finding violates one of the rules listed below, you MUST set its ruleId field to that rule's id (exactly as listed) and cite the id and its source in the finding body. Rule violations are reported even if their type is not in the list above:\n${rules}`,
+    mechanicalNote,
   ]
     .filter(Boolean)
     .join("\n\n");

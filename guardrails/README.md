@@ -36,6 +36,32 @@ Only `active` rules whose `scope` matches a changed file are sent to the model.
 `.guardrails/config.json` holds `strictness`, `commentTypes`, `ignorePatterns`, `triggers` and so on.
 See `PLAN-DETAILED.md` section 6.4 (in the repository root) for the format.
 
+### Mechanical checks (`check:`)
+
+A rule can carry a check that a program verifies without any model, on every mode. Add one line to the rule header in `rules.md`:
+
+```md
+## one-component-per-file
+scope: src/components/**
+severity: medium
+check: max-lines: 150
+exclude: **/*.test.tsx
+status: active
+
+Components stay under 150 lines.
+```
+
+| `check:` | Fires when |
+|---|---|
+| `max-lines: N` | a changed file in scope has more than N lines in the head |
+| `colocated-test` | a new or changed source file in scope has no `name.test.*` / `name.spec.*` next to it (tests, `.d.ts` and files without logic, such as types, re-exports and plain constants, are ignored) |
+| `forbid-import: <pattern>` | an ADDED line imports/requires a specifier matching the pattern (glob if it has `* ? { }`, otherwise a substring) |
+| `forbid-pattern: <regex>` | an ADDED line matches the regex (max 200 characters, rejected if unsafe; `/re/i` flags `i` and `u` allowed). `forbid-pattern(comments|code|strings): <regex>` restricts it to that zone of TS/JS/TSX/JSX files |
+
+`exclude:` is a comma-separated list of globs removed from the rule scope. Check findings have confidence 1, the rule's severity and type, and the exact `file:line`; they are never filtered or capped. The model is told these rules are verified mechanically and must not report them again. If the model part of a review fails or times out, the check findings are still published.
+Limits of `only`: regex literals are not recognised by the lexer, JSX text between tags counts as code, other file types are skipped. Without a workspace (the cloud single-mode fallback) `max-lines`, `colocated-test` and `only` are skipped and the model handles those rules.
+`guardrails init` proposes a `check:` when a rule allows it and drops an invalid one with a warning.
+
 ## Environment variables
 
 Loaded from the process environment or from `guardrails/.env.local` (never committed). See `.env.example`.

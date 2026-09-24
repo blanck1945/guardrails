@@ -24,6 +24,8 @@ export interface AgentRunOptions {
   budget?: Partial<AgentBudget>;
   abortSignal?: AbortSignal;
   costTracker?: CostTracker | undefined;
+  /** Rules whose mechanical check already ran: listed to the model as "do not report". */
+  mechanicalRuleIds?: ReadonlySet<string> | undefined;
 }
 
 export interface AgentRunResult {
@@ -79,7 +81,7 @@ export async function runReviewAgent(opts: AgentRunOptions): Promise<AgentRunRes
 
   const result = await generateText({
     model: resolveModel(opts.model, { tracker: opts.costTracker }),
-    instructions: buildAgentInstructions(opts.config, budget),
+    instructions: buildAgentInstructions(opts.config, budget, opts.mechanicalRuleIds),
     prompt: buildAgentPrompt(opts.input, diff),
     tools,
     // The model must always call a tool; the only way to finish is report_findings.

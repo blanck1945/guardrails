@@ -12,6 +12,13 @@ export const ruleSchema = z.object({
    * Conventions, architecture, naming and structure are `style`; real vulnerabilities `security`; wrong behavior `logic`.
    */
   type: z.enum(["logic", "security", "syntax", "style"]).optional(),
+  /**
+   * Optional mechanical check (one line, see `checks/spec.ts`): `max-lines: N`, `colocated-test`, `forbid-import: <pattern>`,
+   * `forbid-pattern: <regex>` (optionally `forbid-pattern(comments|code|strings): <regex>`). Verified without a model.
+   */
+  check: z.string().optional(),
+  /** Globs excluded from the rule scope (used by `check`; the model is also told to skip them). */
+  exclude: z.array(z.string()).optional(),
   /** Where the rule came from: a file path (e.g. "CLAUDE.md") or "user". */
   source: z.string().optional(),
   /** Only `active` rules are applied to reviews; `suggested` awaits user approval. */

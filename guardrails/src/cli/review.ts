@@ -194,7 +194,7 @@ function formatHuman(
   const sorted = [...out.findings].sort((a, b) => rank(b.severity) - rank(a.severity));
   if (!sorted.length) lines.push("No findings.");
   for (const f of sorted) {
-    lines.push(`${f.file}:${f.line}  [${f.severity}/${f.type}, confidence ${f.confidence}]  ${f.title}`);
+    lines.push(`${f.file}:${f.line}  [${f.severity}/${f.type}, confidence ${f.confidence}${f.origin === "check" ? ", check" : ""}]  ${f.title}`);
     for (const l of f.body.split("\n")) lines.push(`    ${l}`);
     if (f.suggestion) {
       lines.push("    Suggestion:");
@@ -210,6 +210,8 @@ function formatHuman(
     lines.push("");
   }
   if (out.notes) lines.push(`Notes: ${out.notes}`);
+  if (out.checks.findings || out.checks.ran.length) lines.push(`Mechanical checks: ${out.checks.findings} finding(s); rules checked: ${out.checks.ran.join(", ") || "none"}`);
+  if (out.modelIncomplete) lines.push(`The model part did not complete (${out.modelIncomplete}); only mechanical check findings are shown.`);
   lines.push(`Cost: ${out.costUsd === null ? "unknown (no known price)" : `$${out.costUsd.toFixed(5)}`}; ${out.usage.steps} step(s), ${out.usage.inputTokens} input / ${out.usage.outputTokens} output tokens`);
   lines.push(failOn === "none" ? "Threshold: none (never fails)." : `Threshold: fail on ${failOn} or higher.`);
   return lines.join("\n");
@@ -306,7 +308,8 @@ async function runReviewInner(opts: ReviewCliOptions, io: CliIO): Promise<number
   } else {
     io.out(formatHuman(out, rules, { base: baseSha, head: headSha, model: specLabel, files: files.length }, opts.failOn));
   }
-  if (out.incomplete) return 2;
+  // Check findings survive a failed model part; only a review with nothing to show is an infrastructure error.
+  if (out.incomplete && !blocking.length) return 2;
   // The hook sets GUARDRAILS_FINDINGS_EXIT so it can tell "findings" apart from a crash.
   const findingsExit = Number(process.env.GUARDRAILS_FINDINGS_EXIT) || 1;
   return blocking.length ? findingsExit : 0;

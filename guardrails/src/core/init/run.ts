@@ -4,6 +4,7 @@ import type { CostTracker } from "../cost";
 import { safeParseConfig } from "../config";
 import type { Workspace } from "../workspace";
 import { collectRepoContext, type RepoContext } from "./collect";
+import { validateChecks, type CheckWarning } from "./checks";
 import { validateScopes, type ScopeWarning } from "./scopes";
 import { filterCandidates, type FilteredCandidates, type FilterOptions } from "./filter";
 import { synthesizeRules, type CandidateRule } from "./synthesize";
@@ -48,6 +49,8 @@ export interface InitResult {
   candidates: CandidateRule[];
   /** Rules whose scopes did not match the repo (repaired, dropped, or left without scope). */
   scopeWarnings: ScopeWarning[];
+  /** Proposed `check:` values that were invalid and discarded (the rule is kept without its check). */
+  checkWarnings: CheckWarning[];
   filtered: FilteredCandidates;
   merge: MergeSuggestionsResult;
   usage: UsageTotals;
@@ -77,7 +80,9 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
     stage = "filter";
     t0 = Date.now();
     // Scopes are checked against the real file list before confidence filtering, so dead globs lower confidence.
-    const { candidates, scopeWarnings } = validateScopes(synthesized.candidates, context.trackedFiles ?? []);
+    const checked = validateChecks(synthesized.candidates);
+    const { candidates, scopeWarnings } = validateScopes(checked.candidates, context.trackedFiles ?? []);
+    const checkWarnings = checked.warnings;
     const filtered = filterCandidates(candidates, opts);
     const config = safeParseConfig(opts.existingConfigJson).config;
     const merge = mergeSuggestions(opts.existingRulesMd, filtered.kept, {
@@ -85,7 +90,7 @@ export async function runInit(opts: InitOptions): Promise<InitResult> {
       disabledRules: config.disabledRules,
     });
     done("filter", t0, `${merge.added.length} suggested, ${scopeWarnings.length} scope warning(s)`);
-    return { context, candidates, scopeWarnings, filtered, merge, usage, costUsd };
+    return { context, candidates, scopeWarnings, checkWarnings, filtered, merge, usage, costUsd };
   } catch (err) {
     if (timeout.signal.aborted && !opts.abortSignal?.aborted) throw new InitTimeoutError(timeoutSec, stage);
     throw err;
@@ -103,7 +108,7 @@ export function formatInitReport(r: InitResult, opts: { write: boolean; rulesPat
 
   L.push("", `Suggested rules (${r.merge.added.length}):`);
   for (const a of r.merge.added) {
-    L.push(`  + ${a.id} [${a.severity}/${a.type ?? "style"}] scope: ${a.scope.join(", ")} (source: ${a.source})`, `      ${a.rule.split("\n")[0]}`);
+    L.push(`  + ${a.id} [${a.severity}/${a.type ?? "style"}] scope: ${a.scope.join(", ")} (source: ${a.source})${a.check ? ` check: ${a.check}` : ""}`, `      ${a.rule.split("\n")[0]}`);
   }
   if (!r.merge.added.length) L.push("  (none)");
   if (r.scopeWarnings.length) {
@@ -116,6 +121,10 @@ export function formatInitReport(r: InitResult, opts: { write: boolean; rulesPat
       ];
       L.push(`  ! ${w.id}: ${parts.join("; ")}`);
     }
+  }
+  if (r.checkWarnings.length) {
+    L.push("", "Check warnings (invalid check discarded, rule kept without it):");
+    for (const w of r.checkWarnings) L.push(`  ! ${w.id}: "${w.check}": ${w.error}`);
   }
   if (r.merge.skipped.length) L.push(`Already present, left untouched: ${r.merge.skipped.map((s) => s.id).join(", ")}`);
   if (r.filtered.toolEnforced.length) {

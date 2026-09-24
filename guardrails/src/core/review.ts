@@ -1,5 +1,7 @@
 import { generateText, Output, type LanguageModel } from "ai";
-import { costSince, type CostTracker } from "./cost";
+import { BudgetExceededError, costSince, type CostTracker } from "./cost";
+import { runChecks, type CheckSkip } from "./checks";
+import { parseUnifiedDiff } from "./diff";
 import { defaultModelSpec, jsonOnlyInstruction, modelSpecOf, resolveModel } from "./models";
 import { estimateCostUsd } from "./pricing";
 import { runReviewAgent } from "./agent/loop";
@@ -49,7 +51,19 @@ export interface ReviewOutput {
   notes?: string | undefined;
   /** Findings the model reported but that were filtered out, with the reason. */
   dropped: { finding: Finding; reason: "low-confidence" | "comment-type-disabled" | "contradicted-by-repo" | "duplicate" | "over-cap" }[];
+  /** Mechanical rule checks (no model): which rules were verified and what could not run. */
+  checks: { ran: string[]; skipped: CheckSkip[]; findings: number };
+  /** Set when the model part failed or ran out of budget/time; `findings` then holds only the check findings. */
+  modelIncomplete?: "budget" | "timeout" | "error";
 }
+
+function classifyModelFailure(err: unknown, signal?: AbortSignal): "budget" | "timeout" | "error" {
+  if (err instanceof BudgetExceededError) return "budget";
+  if (signal?.aborted || (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError"))) return "timeout";
+  return "error";
+}
+
+const FAILURE_TEXT = { budget: "it reached its spend limit", timeout: "it ran out of time", error: "it failed" } as const;
 
 /**
  * Core of the product. Knows nothing about GitHub, so the cloud worker
@@ -91,9 +105,24 @@ export async function reviewDiff(
     return { findings: kept, dropped };
   };
 
+  // Mechanical checks run first and independently of the model; their findings are never filtered or capped.
+  const checkOutcome = await runChecks({ rules: config.rules, files: parseUnifiedDiff(input.diff), workspace }).catch(() => ({
+    findings: [] as Finding[],
+    ran: [] as string[],
+    skipped: [] as CheckSkip[],
+  }));
+  const mechanical = new Set(checkOutcome.ran);
+  const checkFindings = checkOutcome.findings;
+  const checkKeys = new Set(checkFindings.map((f) => `${f.file}\0${f.ruleId}`));
+
   // Deterministic grounding: drop findings that claim a file is absent when the head tree has it.
-  const verify = async (fs: Finding[]) => {
+  const verify = async (all: Finding[]) => {
+    const tagged = all.map((f): Finding => ({ ...f, origin: "llm" }));
+    // A model finding that repeats a mechanical check (same file, same rule) is noise.
+    const fs = tagged.filter((f) => !(f.ruleId && checkKeys.has(`${f.file}\0${f.ruleId}`)));
+    const repeated = tagged.filter((f) => !fs.includes(f));
     const { findings, dropped } = filterFindings(fs);
+    dropped.push(...repeated.map((finding) => ({ finding, reason: "duplicate" as const })));
     let kept = findings;
     if (workspace) {
       const v = await verifyAbsenceClaims(kept, workspace);
@@ -110,40 +139,56 @@ export async function reviewDiff(
   const withOmitted = (summary: string, omitted: number) =>
     omitted ? `${summary}${summary ? " " : ""}(${omitted} lower-priority finding(s) omitted: over the review cap.)` : summary;
 
-  if (mode === "agent") {
-    if (!workspace) throw new Error("reviewDiff: mode 'agent' requires a workspace");
-    const run = await runReviewAgent({ model, config, workspace, input, abortSignal, costTracker });
-    const { findings, dropped, omitted } = await verify(run.findings);
-    return {
-      summary: withOmitted(run.notes ?? "", omitted),
-      findings,
-      dropped,
-      mode,
-      usage: run.usage,
-      costUsd: costOf(run.usage),
-      incomplete: run.incomplete,
-      notes: run.notes,
-    };
-  }
+  const checksMeta = { ran: checkOutcome.ran, skipped: checkOutcome.skipped, findings: checkFindings.length };
+  const withChecks = (summary: string, failure?: "budget" | "timeout" | "error") => {
+    const extra = [
+      checkFindings.length ? `${checkFindings.length} finding(s) come from mechanical rule checks.` : "",
+      failure ? `The model-based review did not complete (${FAILURE_TEXT[failure]}); only the mechanical check results are shown.` : "",
+    ].filter(Boolean);
+    return [summary, ...extra].filter(Boolean).join(" ");
+  };
 
-  const result = await generateText({
-    model: resolveModel(model, { tracker: costTracker }),
-    output: Output.object({ schema: reviewResultSchema }),
-    instructions: `${buildSystemPrompt(config)}
+  const modelPart = async () => {
+    if (mode === "agent") {
+      if (!workspace) throw new Error("reviewDiff: mode 'agent' requires a workspace");
+      const run = await runReviewAgent({ model, config, workspace, input, abortSignal, costTracker, mechanicalRuleIds: mechanical });
+      const v = await verify(run.findings);
+      return { ...v, summary: run.notes ?? "", usage: run.usage, incomplete: run.incomplete, notes: run.notes };
+    }
+    const result = await generateText({
+      model: resolveModel(model, { tracker: costTracker }),
+      output: Output.object({ schema: reviewResultSchema }),
+      instructions: `${buildSystemPrompt(config, mechanical)}
 
 ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
-    prompt: buildUserPrompt(input),
-    abortSignal,
-  });
+      prompt: buildUserPrompt(input),
+      abortSignal,
+    });
+    const usage = result.steps.length ? sumUsage(result.steps.map((s) => s.usage)) : emptyUsage();
+    const v = await verify(result.output.findings);
+    return { ...v, summary: result.output.summary, usage, incomplete: undefined, notes: undefined };
+  };
 
-  const usage = result.steps.length ? sumUsage(result.steps.map((s) => s.usage)) : emptyUsage();
-  const { findings, dropped, omitted } = await verify(result.output.findings);
+  let part: Awaited<ReturnType<typeof modelPart>>;
+  let failure: "budget" | "timeout" | "error" | undefined;
+  try {
+    part = await modelPart();
+  } catch (err) {
+    // Without any check finding there is nothing to publish: the caller reports the failure as before.
+    if (!checkFindings.length) throw err;
+    failure = classifyModelFailure(err, abortSignal);
+    part = { findings: [], dropped: [], omitted: 0, summary: "", usage: emptyUsage(), incomplete: true, notes: undefined };
+  }
   return {
-    summary: withOmitted(result.output.summary, omitted),
-    findings,
-    dropped,
+    summary: withChecks(withOmitted(part.summary, part.omitted), failure),
+    findings: [...checkFindings, ...part.findings],
+    dropped: part.dropped,
     mode,
-    usage,
-    costUsd: costOf(usage),
+    usage: part.usage,
+    costUsd: costOf(part.usage),
+    ...(part.incomplete !== undefined ? { incomplete: part.incomplete } : {}),
+    ...(part.notes !== undefined ? { notes: part.notes } : {}),
+    checks: checksMeta,
+    ...(failure ? { modelIncomplete: failure } : {}),
   };
 }

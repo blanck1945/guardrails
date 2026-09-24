@@ -1,5 +1,5 @@
 import type { GuardrailsConfig } from "./config";
-import { formatRulesForPrompt } from "./rules/format";
+import { formatMechanicalNote, formatRulesForPrompt } from "./rules/format";
 import type { ReviewInput } from "./types";
 
 export const STRICTNESS = {
@@ -8,8 +8,9 @@ export const STRICTNESS = {
   3: "Be thorough. Report bugs, risks and smaller issues.",
 } as const;
 
-export function buildSystemPrompt(config: GuardrailsConfig): string {
-  const rules = formatRulesForPrompt(config.rules);
+export function buildSystemPrompt(config: GuardrailsConfig, mechanical: ReadonlySet<string> = new Set()): string {
+  const rules = formatRulesForPrompt(config.rules, mechanical);
+  const mechanicalNote = formatMechanicalNote(config.rules, mechanical);
 
   return [
     "You are a senior code reviewer. Review the pull request diff with the repository context provided.",
@@ -21,6 +22,7 @@ export function buildSystemPrompt(config: GuardrailsConfig): string {
     "You only see the diff and the files provided: never claim that a file, test or symbol does not exist (or is never used) elsewhere in the repository; you cannot verify it, so do not state it.",
     config.instructions && `Team instructions:\n${config.instructions}`,
     rules && `Team rules. Whenever a finding violates one of the rules listed below, you MUST set its ruleId field to that rule's id (exactly as listed) and cite the id and its source in the finding body. Rule violations are reported even if their type is not in the list above:\n${rules}`,
+    mechanicalNote,
   ]
     .filter(Boolean)
     .join("\n\n");

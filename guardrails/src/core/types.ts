@@ -17,7 +17,8 @@ export const reviewResultSchema = z.object({
   findings: z.array(findingSchema),
 });
 
-export type Finding = z.infer<typeof findingSchema>;
+/** `origin`: `check` = produced by a mechanical rule check (confidence 1, no model); `llm` = reported by the model. */
+export type Finding = z.infer<typeof findingSchema> & { origin?: "check" | "llm" };
 export type ReviewResult = z.infer<typeof reviewResultSchema>;
 
 /** Source-agnostic view of the code under review. No GitHub types here. */

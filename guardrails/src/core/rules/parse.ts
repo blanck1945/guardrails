@@ -1,4 +1,5 @@
 import type { Rule } from "../config";
+import { parseCheck } from "../checks/spec";
 
 export type RuleStatus = Rule["status"];
 export type RuleSeverity = Rule["severity"];
@@ -19,7 +20,7 @@ export interface ParsedRulesMd {
 }
 
 const KEBAB = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const HEADER_LINE = /^(scope|severity|source|status|type)\s*:\s*(.*)$/i;
+const HEADER_LINE = /^(scope|severity|source|status|type|check|exclude)\s*:\s*(.*)$/i;
 const FENCE = /^\s{0,3}(```+|~~~+)/;
 const SEVERITIES = ["low", "medium", "high"] as const;
 const TYPES = ["logic", "security", "syntax", "style"] as const;
@@ -47,7 +48,7 @@ export function splitGlobs(value: string): string[] {
  * (with its line number) and skipped; the others are kept.
  *
  * Format: one block per rule, `## <kebab-id>`, then optional `key: value` lines
- * (scope, severity, type, source, status), a blank line, then the free-form natural-language body.
+ * (scope, severity, type, source, status, and the optional `check`, `exclude`), a blank line, then the free-form natural-language body.
  * `## ` lines inside fenced code blocks are part of the body.
  */
 export function parseRulesMd(text: string): ParsedRulesMd {
@@ -127,6 +128,16 @@ export function parseRulesMd(text: string): ParsedRulesMd {
     const rule: Rule = { id, rule: body, scope: scope.length ? scope : ["**"], severity, status };
     if (type) rule.type = type;
     if (meta.source?.value) rule.source = meta.source.value;
+    if (meta.exclude?.value) {
+      const ex = splitGlobs(meta.exclude.value);
+      if (ex.length) rule.exclude = ex;
+    }
+    if (meta.check?.value) {
+      // An invalid check is reported and dropped; the rule itself stays (the model still applies it).
+      const c = parseCheck(meta.check.value);
+      if (c.ok) rule.check = meta.check.value.trim();
+      else err(`invalid check: ${c.error} (the rule is kept without its check)`, meta.check.line);
+    }
     seen.add(id);
     rules.push(rule);
   }
@@ -142,6 +153,8 @@ export function serializeRulesMd(rules: readonly Rule[], opts: { preamble?: stri
   const blocks = rules.map((r) => {
     const head = [`## ${r.id}`, `scope: ${(r.scope.length ? r.scope : ["**"]).join(", ")}`, `severity: ${r.severity}`];
     if (r.type) head.push(`type: ${r.type}`);
+    if (r.check) head.push(`check: ${r.check}`);
+    if (r.exclude?.length) head.push(`exclude: ${r.exclude.join(", ")}`);
     if (r.source) head.push(`source: ${r.source}`);
     head.push(`status: ${r.status}`);
     return `${head.join("\n")}\n\n${r.rule.trim()}`;
