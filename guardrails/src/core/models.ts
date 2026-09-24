@@ -1,6 +1,7 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { gateway, wrapLanguageModel, type LanguageModel, type LanguageModelMiddleware } from "ai";
 import type { CostTracker } from "./cost";
+import { LlmCache, llmCacheEnabledByEnv, llmCacheKey, type CachedGeneration } from "./llm-cache";
 
 export const DEFAULT_MODEL_SPEC = "anthropic/claude-sonnet-5";
 
@@ -35,6 +36,8 @@ export class MissingApiKeyError extends Error {
 export interface ResolveModelOptions {
   /** Counts spend per call and enforces its cap. */
   tracker?: CostTracker;
+  /** `true`/instance = replay identical calls from disk. Default: `GUARDRAILS_LLM_CACHE=1`. */
+  cache?: boolean | LlmCache;
   env?: NodeJS.ProcessEnv;
 }
 
@@ -49,17 +52,37 @@ export function modelSpecOf(model: LanguageModel): string {
 
 type WrapGenerate = NonNullable<LanguageModelMiddleware["wrapGenerate"]>;
 
-function trackingMiddleware(spec: string, tracker: CostTracker): LanguageModelMiddleware {
-  const wrapGenerate: WrapGenerate = async ({ doGenerate }) => {
-    tracker.assertWithinBudget();
+function callMiddleware(spec: string, tracker: CostTracker | undefined, cache: LlmCache | undefined): LanguageModelMiddleware {
+  const wrapGenerate: WrapGenerate = async ({ doGenerate, params }) => {
+    const key = cache ? llmCacheKey(spec, params) : undefined;
+    if (cache && key) {
+      const hit = await cache.get(key);
+      if (hit) {
+        tracker?.recordCached();
+        return hit as unknown as Awaited<ReturnType<typeof doGenerate>>;
+      }
+    }
+    tracker?.assertWithinBudget();
     const result = await doGenerate();
-    const u = result.usage;
-    tracker.record(spec, {
-      inputTokens: u.inputTokens.total ?? 0,
-      cachedInputTokens: u.inputTokens.cacheRead ?? 0,
-      cacheWriteTokens: u.inputTokens.cacheWrite ?? 0,
-      outputTokens: u.outputTokens.total ?? 0,
-    });
+    if (cache && key) {
+      const entry: CachedGeneration = {
+        content: result.content,
+        finishReason: result.finishReason,
+        usage: result.usage,
+        warnings: result.warnings,
+        providerMetadata: result.providerMetadata,
+      };
+      await cache.set(key, entry);
+    }
+    if (tracker) {
+      const u = result.usage;
+      tracker.record(spec, {
+        inputTokens: u.inputTokens.total ?? 0,
+        cachedInputTokens: u.inputTokens.cacheRead ?? 0,
+        cacheWriteTokens: u.inputTokens.cacheWrite ?? 0,
+        outputTokens: u.outputTokens.total ?? 0,
+      });
+    }
     return result;
   };
   return { specificationVersion: "v4", wrapGenerate };
@@ -70,13 +93,13 @@ function trackingMiddleware(spec: string, tracker: CostTracker): LanguageModelMi
  *  - `zai:<id>`      -> Z.ai (OpenAI-compatible), needs ZAI_API_KEY
  *  - `deepseek:<id>` -> DeepSeek (OpenAI-compatible), needs DEEPSEEK_API_KEY
  *  - anything else   -> passed as-is to the AI Gateway (e.g. `anthropic/claude-sonnet-5`)
- * A `LanguageModel` instance is accepted too (tests). With a tracker the model is wrapped once
- * (already-wrapped models are returned untouched).
+ * A `LanguageModel` instance is accepted too (tests). When a tracker or the LLM cache
+ * is active the model is wrapped once; already-wrapped models are returned untouched.
  */
 export function resolveModel(spec: LanguageModel, options: ResolveModelOptions = {}): LanguageModel {
   const env = options.env ?? process.env;
   let model: LanguageModel = spec;
-  const specString = modelSpecOf(spec);
+  let specString = modelSpecOf(spec);
 
   if (typeof spec === "string") {
     const sep = spec.indexOf(":");
@@ -90,14 +113,24 @@ export function resolveModel(spec: LanguageModel, options: ResolveModelOptions =
       specs.set(model, spec);
     }
     // Plain strings (no known provider prefix) stay strings: the AI SDK routes them to the Gateway.
+    specString = spec;
   }
 
-  if (!options.tracker) return model;
-  if (typeof model !== "string" && instrumented.has(model)) return model;
+  const cache =
+    options.cache instanceof LlmCache ? options.cache : (options.cache ?? llmCacheEnabledByEnv(env)) ? new LlmCache() : undefined;
+  if (!options.tracker && !cache) return model;
+
+  if (typeof model !== "string") {
+    if (instrumented.has(model)) return model;
+    const wrapped = wrapLanguageModel({ model, middleware: callMiddleware(specString, options.tracker, cache) });
+    specs.set(wrapped, specString);
+    instrumented.add(wrapped);
+    return wrapped;
+  }
+  // Gateway string: resolve to a real model object through the default provider so it can be wrapped.
   const wrapped = wrapLanguageModel({
-    // Gateway ids are plain strings; wrapping needs a model object.
-    model: typeof model === "string" ? gateway(model) : model,
-    middleware: trackingMiddleware(specString, options.tracker),
+    model: gateway(model),
+    middleware: callMiddleware(specString, options.tracker, cache),
   });
   specs.set(wrapped, specString);
   instrumented.add(wrapped);

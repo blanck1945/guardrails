@@ -1,7 +1,7 @@
 /**
  * Local CLI. Usage: pnpm guardrails init [--path <dir>] [--write] [--min-confidence <0-1>]
  *                                        [--include-tool-enforced] [--model <id>]
- *                                        [--budget-usd <N>] [--dry-run] [--yes]
+ *                                        [--budget-usd <N>] [--dry-run] [--yes] [--llm-cache]
  * Model: `--model` or GUARDRAILS_MODEL (`zai:<id>`, `deepseek:<id>` or an AI Gateway id). Needs the matching
  * credential in the environment or .env.local (ZAI_API_KEY, DEEPSEEK_API_KEY, AI_GATEWAY_API_KEY; see .env.example).
  */
@@ -40,10 +40,11 @@ async function main(argv: string[]): Promise<number> {
       "budget-usd": { type: "string" },
       "dry-run": { type: "boolean", default: false },
       yes: { type: "boolean", default: false },
+      "llm-cache": { type: "boolean", default: false },
     },
   });
   if (positionals[0] !== "init") {
-    console.error("Usage: guardrails init [--path <dir>] [--write] [--min-confidence <0-1>] [--include-tool-enforced] [--model <id>] [--budget-usd <N>] [--dry-run] [--yes]");
+    console.error("Usage: guardrails init [--path <dir>] [--write] [--min-confidence <0-1>] [--include-tool-enforced] [--model <id>] [--budget-usd <N>] [--dry-run] [--yes] [--llm-cache]");
     return 2;
   }
   const min = values["min-confidence"] === undefined ? undefined : Number(values["min-confidence"]);
@@ -66,6 +67,9 @@ async function main(argv: string[]): Promise<number> {
     console.error("--budget-usd must be a positive number");
     return 2;
   }
+
+  // Dev/eval only: replay identical model calls from eval/.cache/llm (same as GUARDRAILS_LLM_CACHE=1).
+  if (values["llm-cache"]) process.env.GUARDRAILS_LLM_CACHE = "1";
 
   const root = path.resolve(values.path);
   const rulesFile = path.join(root, RULES_PATH);
