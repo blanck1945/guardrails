@@ -8,10 +8,10 @@ import { parseRulesMd, serializeRulesMd } from "../rules";
 import { LocalWorkspace, type ListFilesInput, type ReadFileInput, type Workspace } from "../workspace";
 import { collectRepoContext, INIT_LIMITS } from "./collect";
 import { filterCandidates } from "./filter";
-import { formatInitReport, runInit } from "./run";
+import { formatInitReport, InitTimeoutError, runInit } from "./run";
 import { validateScopes } from "./scopes";
 import { isSecretPath, redactSecrets } from "./secrets";
-import { normalizeCandidates, synthesizeRules, type CandidateRule } from "./synthesize";
+import { GROUP_MAX_CHARS, groupFiles, INIT_MAX_OUTPUT_TOKENS, InitOutputCapError, MAX_CANDIDATES, mergeGroupCandidates, normalizeCandidates, synthesizeRules, type CandidateRule } from "./synthesize";
 import { mergeSuggestions } from "./write";
 
 const SECRET_VALUE = "sk-live-SUPERSECRETVALUE1234567890abcdef";
@@ -201,8 +201,8 @@ describe("synthesizeRules", () => {
 
   it("normalizeCandidates dedupes ids and drops empty rules", () => {
     const out = normalizeCandidates([cand({ id: "a" }), cand({ id: "a" }), cand({ id: "b", rule: "  " }), cand({ id: "c", confidence: 3 })]);
-    expect(out.map((c) => c.id)).toEqual(["a", "a-2", "c"]);
-    expect(out[2]!.confidence).toBe(1);
+    expect(out.map((c) => c.id)).toEqual(["c", "a", "a-2"]); // highest confidence first
+    expect(out[0]!.confidence).toBe(1);
   });
 });
 
@@ -373,5 +373,114 @@ describe("runInit scope validation (mock model)", () => {
     expect(r.scopeWarnings.map((w) => w.id)).toEqual(["seeds", "dead"]);
     expect(r.filtered.lowConfidence.map((c) => c.id)).toEqual(["dead"]);
     expect(formatInitReport(r, { write: false, rulesPath: "x" })).toContain("Scope warnings");
+  });
+});
+
+describe("init limits: rule cap, output cap, timeout, progress", () => {
+  const usage = {
+    inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 },
+    outputTokens: { total: 5, text: 5, reasoning: 0 },
+  };
+  const okModel = (rules: unknown[], onOptions?: (o: { maxOutputTokens?: number }) => void) =>
+    new MockLanguageModelV4({
+      doGenerate: async (options) => {
+        onOptions?.(options as { maxOutputTokens?: number });
+        return { content: [{ type: "text", text: JSON.stringify({ rules }) }], finishReason: { unified: "stop", raw: undefined }, usage, warnings: [] };
+      },
+    });
+
+  it("keeps at most MAX_CANDIDATES rules, highest confidence first", () => {
+    const many = Array.from({ length: 25 }, (_, i) => cand({ id: `rule-${i}`, confidence: i === 24 ? 0.99 : 0.5 + i / 100 }));
+    const out = normalizeCandidates(many);
+    expect(out).toHaveLength(MAX_CANDIDATES);
+    expect(MAX_CANDIDATES).toBeLessThanOrEqual(15);
+    expect(out[0]!.id).toBe("rule-24");
+    expect(out.map((c) => c.confidence)).toEqual([...out.map((c) => c.confidence)].sort((a, b) => b - a));
+  });
+
+  it("passes a bounded maxOutputTokens to the model", async () => {
+    let seen: number | undefined;
+    await synthesizeRules(await collectRepoContext(ws), { model: okModel([], (o) => (seen = o.maxOutputTokens)) });
+    expect(seen).toBe(INIT_MAX_OUTPUT_TOKENS);
+    await synthesizeRules(await collectRepoContext(ws), { model: okModel([], (o) => (seen = o.maxOutputTokens)), maxOutputTokens: 1234 });
+    expect(seen).toBe(1234);
+  });
+
+  it("reports a clear error when the output cap is hit before any answer", async () => {
+    const truncated = new MockLanguageModelV4({
+      doGenerate: async () => ({ content: [], finishReason: { unified: "length", raw: undefined }, usage, warnings: [] }),
+    });
+    await expect(synthesizeRules(await collectRepoContext(ws), { model: truncated, maxOutputTokens: 50 })).rejects.toThrow(InitOutputCapError);
+  });
+
+  it("aborts a slow model at the timeout with a clear error", async () => {
+    const slow = new MockLanguageModelV4({
+      doGenerate: ({ abortSignal }) =>
+        new Promise((_, reject) => {
+          if (abortSignal?.aborted) return reject(abortSignal.reason ?? new Error("aborted"));
+          abortSignal?.addEventListener("abort", () => reject(abortSignal.reason ?? new Error("aborted")));
+        }),
+    });
+    const t0 = Date.now();
+    const err = await runInit({ workspace: ws, model: slow, timeoutSec: 0.2 }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(InitTimeoutError);
+    expect((err as Error).message).toMatch(/timed out after 0\.2s.*"synthesize"/);
+    expect(Date.now() - t0).toBeLessThan(3000);
+  });
+
+  it("reports progress per stage with timings", async () => {
+    const stages: string[] = [];
+    await runInit({ workspace: ws, model: okModel([cand({ id: "one" })]), onProgress: (s, i) => stages.push(`${s}:${typeof i.ms}`) });
+    expect(stages).toEqual(["collect:number", "synthesize:number", "filter:number"]);
+  });
+});
+
+describe("parallel synthesis by source groups", () => {
+  const f = (path: string, n: number) => ({ path, kind: "instructions" as const, content: "x".repeat(n), truncated: false });
+  it("groupFiles packs in order, isolates big files and caps the group count", () => {
+    expect(groupFiles([f("a", 100), f("b", 100)], 1000).map((g) => g.length)).toEqual([2]);
+    expect(groupFiles([f("a", 600), f("b", 600), f("c", 100)], 1000).map((g) => g.map((x) => x.path))).toEqual([["a"], ["b", "c"]]);
+    const many = Array.from({ length: 9 }, (_, i) => f(`f${i}`, 900));
+    expect(groupFiles(many, 1000, 4)).toHaveLength(4);
+  });
+
+  it("mergeGroupCandidates dedupes by id (best confidence wins) and caps", () => {
+    const out = mergeGroupCandidates([
+      [cand({ id: "english-only", confidence: 0.7 }), cand({ id: "b", confidence: 0.8 })],
+      [cand({ id: "English Only", confidence: 0.95, rule: "better" })],
+    ]);
+    expect(out.map((c) => c.id)).toEqual(["english-only", "b"]);
+    expect(out[0]!.rule).toBe("better");
+  });
+
+  it("one call per group, sources split, results merged", async () => {
+    const prompts: string[] = [];
+    const model = new MockLanguageModelV4({
+      doGenerate: async (options) => {
+        const text = JSON.stringify(options.prompt);
+        prompts.push(text);
+        const id = text.includes("AAAA") ? "from-a" : "from-b";
+        return {
+          content: [{ type: "text", text: JSON.stringify({ rules: [cand({ id, rule: `rule ${id}` })] }) }],
+          finishReason: { unified: "stop", raw: undefined },
+          usage: { inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: 0 }, outputTokens: { total: 5, text: 5, reasoning: 0 } },
+          warnings: [],
+        };
+      },
+    });
+    const ctx = {
+      files: [
+        { path: "A.md", kind: "instructions" as const, content: "AAAA" + "x".repeat(GROUP_MAX_CHARS), truncated: false },
+        { path: "B.md", kind: "readme" as const, content: "BBBB" + "y".repeat(GROUP_MAX_CHARS), truncated: false },
+      ],
+      structure: "Root files: A.md, B.md",
+      skipped: [],
+      totalChars: 2 * GROUP_MAX_CHARS,
+    };
+    const r = await synthesizeRules(ctx, { model });
+    expect(prompts).toHaveLength(2);
+    expect(prompts.filter((p) => p.includes("AAAA") && p.includes("BBBB"))).toHaveLength(0);
+    expect(r.candidates.map((c) => c.id).sort()).toEqual(["from-a", "from-b"]);
+    expect(r.usage.inputTokens).toBe(20);
   });
 });

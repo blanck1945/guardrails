@@ -24,25 +24,28 @@ const PROVIDERS: Record<string, ProviderDef> = {
 };
 
 /**
- * Z.ai models that cannot turn thinking off ("GLM-5.3 and GLM-5.3-FLASH use forced thinking", docs.z.ai
- * thinking-mode, verified 2026-09-24). The `thinking` parameter is only sent to the other zai models.
+ * GLM-5.3 family: reasoning cannot be disabled ("always operates with reasoning enabled", docs.z.ai
+ * guides/llm/glm-5.3, verified 2026-09-24); `thinking: disabled` would even fail. Its depth is set with
+ * `reasoning_effort` (low | high | max, default max).
  */
 export function zaiThinkingIsForced(modelId: string): boolean {
   return /^glm-5\.3/i.test(modelId);
 }
 
 /**
- * Adjusts the request body for Z.ai:
+ * Adjusts the request body for Z.ai (never for other providers):
  *  - drops `response_format: {type: "json_object"}`. Measured 2026-09-24: in that mode Z.ai deletes the token
  *    "json" from the output ("seeds.config.json" -> "seeds.config."), which corrupted generated file names.
  *    JSON output is requested in the prompt instead (see `jsonOnlyInstruction`) and validated by the schema.
- *  - sends `thinking: {type: "disabled"}` for models that allow it, unless `GUARDRAILS_THINKING=1`.
+ *  - cuts reasoning cost unless `GUARDRAILS_THINKING=1`: `thinking: {type: "disabled"}` for models that allow it,
+ *    `reasoning_effort: "low"` for the GLM-5.3 family (which cannot disable it).
  */
 export function zaiRequestBody(body: Record<string, any>, modelId: string, env: Env): Record<string, any> {
   const out = { ...body };
   if (out.response_format?.type === "json_object") delete out.response_format;
-  const thinkingWanted = env.GUARDRAILS_THINKING?.trim() === "1";
-  if (!thinkingWanted && !zaiThinkingIsForced(modelId) && out.thinking === undefined) out.thinking = { type: "disabled" };
+  if (env.GUARDRAILS_THINKING?.trim() === "1") return out;
+  if (zaiThinkingIsForced(modelId)) out.reasoning_effort ??= "low";
+  else out.thinking ??= { type: "disabled" };
   return out;
 }
 
@@ -171,8 +174,11 @@ export function resolveModel(spec: LanguageModel, options: ResolveModelOptions =
   return wrapped;
 }
 
-/** Prompt text asking for a bare JSON object; used where the provider's own JSON mode is not trusted (zai). */
-export function jsonOnlyInstruction(jsonSchema: unknown): string {
-  return `Respond with ONLY one JSON object that matches this JSON schema, with no markdown fences and no other text:
-${JSON.stringify(jsonSchema)}`;
+/**
+ * Prompt text asking for a bare JSON object; used where the provider's own JSON mode is not trusted (zai).
+ * Takes an EXAMPLE value, not a JSON schema: weaker models echo a schema back instead of filling it.
+ */
+export function jsonOnlyInstruction(example: unknown): string {
+  return `Respond with ONLY one JSON object (no markdown fences, no other text), with this shape:
+${JSON.stringify(example)}`;
 }

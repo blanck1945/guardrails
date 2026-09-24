@@ -1,6 +1,5 @@
 import { generateText, Output, type LanguageModel } from "ai";
 import { costSince, type CostTracker } from "./cost";
-import { z } from "zod";
 import { defaultModelSpec, jsonOnlyInstruction, modelSpecOf, resolveModel } from "./models";
 import { estimateCostUsd } from "./pricing";
 import { runReviewAgent } from "./agent/loop";
@@ -10,6 +9,13 @@ import { stripUnknownRuleIds } from "./rules/select";
 import { buildSystemPrompt, buildUserPrompt } from "./prompt";
 import { reviewResultSchema, type Finding, type ReviewInput } from "./types";
 import type { Workspace } from "./workspace";
+
+const REVIEW_EXAMPLE = {
+  summary: "One sentence.",
+  findings: [
+    { file: "src/a.ts", line: 12, type: "logic", severity: "medium", confidence: 0.8, title: "Short title", body: "What is wrong and why.", ruleId: "optional-rule-id" },
+  ],
+};
 
 const MIN_CONFIDENCE = { 1: 0.8, 2: 0.6, 3: 0.4 } as const;
 
@@ -100,7 +106,7 @@ export async function reviewDiff(
     output: Output.object({ schema: reviewResultSchema }),
     instructions: `${buildSystemPrompt(config)}
 
-${jsonOnlyInstruction(z.toJSONSchema(reviewResultSchema))}`,
+${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
     prompt: buildUserPrompt(input),
     abortSignal,
   });

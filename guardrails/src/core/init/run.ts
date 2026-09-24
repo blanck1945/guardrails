@@ -9,6 +9,24 @@ import { filterCandidates, type FilteredCandidates, type FilterOptions } from ".
 import { synthesizeRules, type CandidateRule } from "./synthesize";
 import { mergeSuggestions, type MergeSuggestionsResult } from "./write";
 
+export type InitStage = "collect" | "synthesize" | "filter" | "write";
+
+/** Default wall-clock limit for the whole run (seconds). */
+export const DEFAULT_INIT_TIMEOUT_SEC = 180;
+
+export class InitTimeoutError extends Error {
+  constructor(
+    readonly timeoutSec: number,
+    readonly stage: InitStage,
+  ) {
+    super(
+      `init timed out after ${timeoutSec}s while running the "${stage}" stage; the model call was cancelled and nothing was written. ` +
+        `Raise --timeout-sec, or use a faster model (--model).`,
+    );
+    this.name = "InitTimeoutError";
+  }
+}
+
 export interface InitOptions extends FilterOptions {
   workspace: Workspace;
   model?: LanguageModel;
@@ -17,6 +35,10 @@ export interface InitOptions extends FilterOptions {
   /** Current `.guardrails/config.json` contents, if any. */
   existingConfigJson?: string | null;
   abortSignal?: AbortSignal;
+  /** Wall-clock limit for collect + synthesize + filter, in seconds. Default `DEFAULT_INIT_TIMEOUT_SEC`; 0 = none. */
+  timeoutSec?: number;
+  /** Called at the end of each stage with its duration (for progress output). */
+  onProgress?: (stage: InitStage, info: { ms: number; detail: string }) => void;
   /** Counts spend and stops the run (`BudgetExceededError`) when its cap is reached. */
   costTracker?: CostTracker;
 }
@@ -35,22 +57,41 @@ export interface InitResult {
 
 /** collect -> synthesize -> filter -> merge. Pure with respect to the disk: the caller writes `merge.text`. */
 export async function runInit(opts: InitOptions): Promise<InitResult> {
-  const context = await collectRepoContext(opts.workspace);
-  const synthesized = await synthesizeRules(context, {
-    model: opts.model,
-    abortSignal: opts.abortSignal,
-    costTracker: opts.costTracker,
-  });
-  const { usage, costUsd } = synthesized;
-  // Scopes are checked against the real file list before confidence filtering, so dead globs lower confidence.
-  const { candidates, scopeWarnings } = validateScopes(synthesized.candidates, context.trackedFiles ?? []);
-  const filtered = filterCandidates(candidates, opts);
-  const config = safeParseConfig(opts.existingConfigJson).config;
-  const merge = mergeSuggestions(opts.existingRulesMd, filtered.kept, {
-    configRules: config.rules,
-    disabledRules: config.disabledRules,
-  });
-  return { context, candidates, scopeWarnings, filtered, merge, usage, costUsd };
+  const timeoutSec = opts.timeoutSec ?? DEFAULT_INIT_TIMEOUT_SEC;
+  const timeout = new AbortController();
+  const timer = timeoutSec > 0 ? setTimeout(() => timeout.abort(), timeoutSec * 1000) : undefined;
+  const signal = opts.abortSignal ? AbortSignal.any([opts.abortSignal, timeout.signal]) : timeout.signal;
+  let stage: InitStage = "collect";
+  const done = (st: InitStage, t0: number, detail: string) => opts.onProgress?.(st, { ms: Date.now() - t0, detail });
+  try {
+    let t0 = Date.now();
+    const context = await collectRepoContext(opts.workspace);
+    done("collect", t0, `${context.files.length} source file(s), ${context.totalChars} chars`);
+
+    stage = "synthesize";
+    t0 = Date.now();
+    const synthesized = await synthesizeRules(context, { model: opts.model, abortSignal: signal, costTracker: opts.costTracker });
+    const { usage, costUsd } = synthesized;
+    done("synthesize", t0, `${synthesized.candidates.length} candidate rule(s), ${usage.outputTokens} output tokens`);
+
+    stage = "filter";
+    t0 = Date.now();
+    // Scopes are checked against the real file list before confidence filtering, so dead globs lower confidence.
+    const { candidates, scopeWarnings } = validateScopes(synthesized.candidates, context.trackedFiles ?? []);
+    const filtered = filterCandidates(candidates, opts);
+    const config = safeParseConfig(opts.existingConfigJson).config;
+    const merge = mergeSuggestions(opts.existingRulesMd, filtered.kept, {
+      configRules: config.rules,
+      disabledRules: config.disabledRules,
+    });
+    done("filter", t0, `${merge.added.length} suggested, ${scopeWarnings.length} scope warning(s)`);
+    return { context, candidates, scopeWarnings, filtered, merge, usage, costUsd };
+  } catch (err) {
+    if (timeout.signal.aborted && !opts.abortSignal?.aborted) throw new InitTimeoutError(timeoutSec, stage);
+    throw err;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 export function formatInitReport(r: InitResult, opts: { write: boolean; rulesPath: string }): string {

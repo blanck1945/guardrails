@@ -22,6 +22,7 @@ All commands run from this directory as `pnpm guardrails <command>`.
 - `--mode agent|single` (default `agent`: the model can read files and grep the repo; `single` is one call over the diff).
 - `--model <id>` overrides `GUARDRAILS_MODEL`.
 - `--budget-usd N` stops the run when the estimated spend reaches N. `--dry-run` prints the estimate and calls nothing. `--yes` accepts an estimate above US$1.
+- `init` also takes `--timeout-sec N` (default 180, 0 = none): aborts the model calls with a clear error. It prints progress per stage (collect, synthesize, filter, write) on stderr, suggests at most 15 rules, and checks every rule scope against the tracked files (repairs an unambiguous truncated name, drops dead globs, lists them under "Scope warnings").
 - `--json` prints machine-readable output. `--fail-on high|medium|low|none` sets the severity that fails the run (default `high`).
 
 Exit codes: `0` no findings at or above the threshold, `1` findings at or above it, `2` usage or infrastructure error (bad arguments, missing API key, git error, incomplete review), `3` budget cut.
@@ -43,6 +44,7 @@ Loaded from the process environment or from `guardrails/.env.local` (never commi
 |---|---|
 | `GUARDRAILS_MODEL` | Model spec: `zai:<id>`, `deepseek:<id>` or an AI Gateway id (default `anthropic/claude-sonnet-5`). |
 | `ZAI_API_KEY`, `DEEPSEEK_API_KEY`, `AI_GATEWAY_API_KEY` | Credential for the chosen model provider. |
+| `GUARDRAILS_THINKING=1` | Z.ai only: keep the model's default reasoning. Without it Guardrails sends `thinking: disabled` (models that allow it) or `reasoning_effort: low` (GLM-5.3 family, which cannot disable reasoning). |
 | `GUARDRAILS_LLM_CACHE=1` | Dev/eval only: replay identical model calls from disk. |
 | `GUARDRAILS_SKIP=1` | Skips the pre-push hook for one push. |
 | `GUARDRAILS_BUDGET_USD` | Per-review budget used by the hook (default `0.50`). |

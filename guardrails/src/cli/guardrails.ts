@@ -10,7 +10,8 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { BudgetExceededError, CostTracker } from "../core/cost";
-import { formatInitReport, runInit } from "../core/init";
+import { formatInitReport, InitTimeoutError, runInit } from "../core/init";
+import { InitOutputCapError } from "../core/init/synthesize";
 import { collectRepoContext } from "../core/init/collect";
 import { buildSynthesisPrompt, SYNTHESIS_INSTRUCTIONS } from "../core/init/synthesize";
 import { defaultModelSpec } from "../core/models";
@@ -89,10 +90,11 @@ async function main(argv: string[]): Promise<number> {
       "dry-run": { type: "boolean", default: false },
       yes: { type: "boolean", default: false },
       "llm-cache": { type: "boolean", default: false },
+      "timeout-sec": { type: "string" },
     },
   });
   if (positionals[0] !== "init") {
-    console.error("Usage: guardrails init [--path <dir>] [--write] [--min-confidence <0-1>] [--include-tool-enforced] [--model <id>] [--budget-usd <N>] [--dry-run] [--yes] [--llm-cache]");
+    console.error("Usage: guardrails init [--path <dir>] [--write] [--min-confidence <0-1>] [--include-tool-enforced] [--model <id>] [--budget-usd <N>] [--dry-run] [--yes] [--llm-cache] [--timeout-sec <N>]");
     return 2;
   }
   const min = values["min-confidence"] === undefined ? undefined : Number(values["min-confidence"]);
@@ -110,6 +112,11 @@ async function main(argv: string[]): Promise<number> {
     }
   }
 
+  const timeoutSec = values["timeout-sec"] === undefined ? undefined : Number(values["timeout-sec"]);
+  if (timeoutSec !== undefined && !(timeoutSec >= 0)) {
+    console.error("--timeout-sec must be a number >= 0 (0 = no limit)");
+    return 2;
+  }
   const budgetUsd = values["budget-usd"] === undefined ? undefined : Number(values["budget-usd"]);
   if (budgetUsd !== undefined && !(budgetUsd > 0)) {
     console.error("--budget-usd must be a positive number");
@@ -156,6 +163,8 @@ async function main(argv: string[]): Promise<number> {
     existingConfigJson: await readOptional(path.join(root, CONFIG_PATH)),
     minConfidence: min,
     includeToolEnforced: values["include-tool-enforced"],
+    timeoutSec,
+    onProgress: (stage, { ms, detail }) => console.error(`[init] ${stage} done in ${(ms / 1000).toFixed(1)}s (${detail})`),
     });
   } catch (err) {
     if (err instanceof BudgetExceededError) {
@@ -163,12 +172,18 @@ async function main(argv: string[]): Promise<number> {
       console.error(`${err.message}. Executed before stopping: ${s.calls} call(s), ${s.totalTokens} tokens, $${s.costUsd.toFixed(4)}${s.complete ? "" : " (+ unpriced tokens)"}. Nothing was written.`);
       return 3;
     }
+    if (err instanceof InitTimeoutError || err instanceof InitOutputCapError) {
+      console.error(`guardrails: ${err.message}`);
+      return 1;
+    }
     throw err;
   }
 
   if (values.write && result.merge.added.length) {
+    const t0 = Date.now();
     await fs.mkdir(path.dirname(rulesFile), { recursive: true });
     await fs.writeFile(rulesFile, result.merge.text, "utf8");
+    console.error(`[init] write done in ${((Date.now() - t0) / 1000).toFixed(1)}s (${RULES_PATH})`);
   }
   console.log(formatInitReport(result, { write: values.write, rulesPath: RULES_PATH }));
   return 0;

@@ -79,15 +79,23 @@ describe("zai request body (json mode + thinking)", () => {
   it("sends thinking disabled only to zai models that allow it", async () => {
     expect((await bodyFor("zai:glm-4.6")).thinking).toEqual({ type: "disabled" });
     expect((await bodyFor("zai:glm-4.5-air")).thinking).toEqual({ type: "disabled" });
-    expect(await bodyFor("zai:glm-5.3")).not.toHaveProperty("thinking"); // forced thinking
-    expect(await bodyFor("zai:glm-5.3-flash")).not.toHaveProperty("thinking");
+    for (const id of ["glm-5.3", "glm-5.3-flash"]) {
+      // forced thinking: `thinking: disabled` would be rejected; the depth is lowered instead
+      const b = await bodyFor(`zai:${id}`);
+      expect(b).not.toHaveProperty("thinking");
+      expect(b.reasoning_effort).toBe("low");
+    }
+    expect(await bodyFor("zai:glm-4.6")).not.toHaveProperty("reasoning_effort");
   });
 
   it("GUARDRAILS_THINKING=1 keeps thinking on", async () => {
     expect(await bodyFor("zai:glm-4.6", { GUARDRAILS_THINKING: "1" })).not.toHaveProperty("thinking");
+    expect(await bodyFor("zai:glm-5.3", { GUARDRAILS_THINKING: "1" })).not.toHaveProperty("reasoning_effort");
   });
 
   it("never sends thinking to other providers", async () => {
-    expect(await bodyFor("deepseek:deepseek-flash")).not.toHaveProperty("thinking");
+    const b = await bodyFor("deepseek:deepseek-flash");
+    expect(b).not.toHaveProperty("thinking");
+    expect(b).not.toHaveProperty("reasoning_effort");
   });
 });
