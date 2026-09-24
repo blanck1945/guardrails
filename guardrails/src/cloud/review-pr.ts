@@ -202,10 +202,14 @@ export async function reviewPullRequest(ev: PullRequestEvent, deps: ReviewPrDeps
     findings: result.findings.length,
     incomplete: result.incomplete === true,
   });
+  // Agent mode may report findings without notes: never post an empty summary.
   const summary =
-    result.incomplete && !result.summary
+    result.summary ||
+    (result.incomplete
       ? "The analysis of this change could not be completed. Push a new commit to try again."
-      : result.summary;
+      : result.findings.length
+        ? `Found ${result.findings.length} issue(s) worth a look.`
+        : "No issues found.");
 
   const inline = result.findings.filter((f) => valid.get(f.file)?.has(f.line));
   const orphan = result.findings.filter((f) => !inline.includes(f));

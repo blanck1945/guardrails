@@ -9,6 +9,7 @@
     "test": "vitest run",
     "eval": "tsx eval/cli.ts",
     "guardrails": "tsx src/cli/guardrails.ts",
+    "smoke:cloud": "node -e \"process.env.GUARDRAILS_SMOKE=1;require('child_process').spawnSync('pnpm',['vitest','run','src/cloud/smoke.integration.test.ts','--disable-console-intercept'],{stdio:'inherit',shell:true,env:process.env})\"",
     "check": "pnpm typecheck && pnpm test"
   },
   "dependencies": {
