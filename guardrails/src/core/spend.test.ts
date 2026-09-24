@@ -58,7 +58,7 @@ describe("guardrails init CLI", () => {
     spawnSync("git", ["add", "-A"], { cwd: repo });
     return spawnSync(process.execPath, [tsx, cli, "init", "--path", repo, ...args], {
       // No provider keys at all: any attempt to reach a model would fail loudly.
-      env: { PATH: process.env.PATH ?? "", ...env },
+      env: { PATH: process.env.PATH ?? "", ...env } as unknown as NodeJS.ProcessEnv,
       encoding: "utf8",
       cwd: os.tmpdir(),
     });

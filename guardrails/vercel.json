@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "regions": ["gru1"],
+  "functions": {
+    "app/api/webhooks/github/route.ts": { "maxDuration": 300 }
+  }
+}

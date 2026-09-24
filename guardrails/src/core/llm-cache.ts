@@ -11,10 +11,13 @@ export interface CachedGeneration {
   providerMetadata?: unknown;
 }
 
+/** Environment shape accepted by helpers (a plain map; `NodeJS.ProcessEnv` also satisfies it). */
+export type Env = Record<string, string | undefined>;
+
 export const DEFAULT_LLM_CACHE_DIR = path.join("eval", ".cache", "llm");
 
 /** Cache is dev/eval only: off unless `GUARDRAILS_LLM_CACHE=1` or an explicit option. */
-export function llmCacheEnabledByEnv(env: NodeJS.ProcessEnv = process.env): boolean {
+export function llmCacheEnabledByEnv(env: Env = process.env): boolean {
   return env.GUARDRAILS_LLM_CACHE === "1";
 }
 

@@ -1,12 +1,12 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { gateway, wrapLanguageModel, type LanguageModel, type LanguageModelMiddleware } from "ai";
 import type { CostTracker } from "./cost";
-import { LlmCache, llmCacheEnabledByEnv, llmCacheKey, type CachedGeneration } from "./llm-cache";
+import { LlmCache, llmCacheEnabledByEnv, llmCacheKey, type CachedGeneration, type Env } from "./llm-cache";
 
 export const DEFAULT_MODEL_SPEC = "anthropic/claude-sonnet-5";
 
 /** Spec used when the caller gave none: `GUARDRAILS_MODEL` or the default Gateway model. */
-export function defaultModelSpec(env: NodeJS.ProcessEnv = process.env): string {
+export function defaultModelSpec(env: Env = process.env): string {
   return env.GUARDRAILS_MODEL?.trim() || DEFAULT_MODEL_SPEC;
 }
 
@@ -38,7 +38,7 @@ export interface ResolveModelOptions {
   tracker?: CostTracker;
   /** `true`/instance = replay identical calls from disk. Default: `GUARDRAILS_LLM_CACHE=1`. */
   cache?: boolean | LlmCache;
-  env?: NodeJS.ProcessEnv;
+  env?: Env;
 }
 
 const specs = new WeakMap<object, string>();
