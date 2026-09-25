@@ -1,5 +1,5 @@
 import type { LanguageModel } from "ai";
-import { MODE_PRESETS, reviewDiff, selectMode, type Finding, type ReviewInput, type ReviewMode, type Rule } from "@/core";
+import { buildSummary, MODE_PRESETS, reviewDiff, selectMode, statsFooter, type Finding, type ReviewInput, type ReviewMode, type Rule } from "@/core";
 import { commentableLines } from "./diff";
 import { DEFAULT_IGNORES, isIgnored } from "@/core/paths";
 import {
@@ -207,30 +207,45 @@ export async function reviewPullRequest(ev: PullRequestEvent, deps: ReviewPrDeps
     // Always: the temp directories hold client code.
     await workspace?.dispose().catch(() => log("review.dispose-failed", at));
   }
+  const ms = Date.now() - started;
   log("review.analyzed", {
     ...at,
     mode,
     reviewMode: selection.mode,
     modeSource: selection.source,
-    ms: Date.now() - started,
+    passes: result.passes,
+    passesFailed: result.passesFailed,
+    inputTokens: result.usage.inputTokens,
+    outputTokens: result.usage.outputTokens,
+    cachedInputTokens: result.usage.cachedInputTokens,
+    steps: result.usage.steps,
+    ms,
     costUsd: result.costUsd,
     findings: result.findings.length,
+    merged: result.merged,
     incomplete: result.incomplete === true,
   });
-  // Agent mode may report findings without notes: never post an empty summary.
-  const summary =
-    result.summary ||
-    (result.incomplete
-      ? "The analysis of this change could not be completed. Push a new commit to try again."
-      : result.findings.length
-        ? `Found ${result.findings.length} issue(s) worth a look.`
-        : "No issues found.");
+  // The summary is built by code (mode, counts by origin, at most two lines of the model's notes).
+  const summary = buildSummary({
+    selection,
+    total: result.findings.length,
+    fromChecks: result.checks.findings,
+    fromModel: result.findings.length - result.checks.findings,
+    merged: result.merged,
+    omitted: result.omitted,
+    notes: result.modelSummary,
+    incomplete: result.incomplete,
+    modelIncomplete: result.modelIncomplete,
+    passes: result.passes,
+    passesFailed: result.passesFailed,
+  });
+  const showStats = (deps.env ?? process.env).GUARDRAILS_SHOW_STATS === "1";
 
   const inline = result.findings.filter((f) => valid.get(f.file)?.has(f.line));
   const orphan = result.findings.filter((f) => !inline.includes(f));
 
   const body =
-    `**Guardrails**\n\n${summary}` +
+    summary +
     (rulesNote ? `\n\n${rulesNote}` : "") +
     (orphan.length
       ? "\n\n" +
@@ -240,7 +255,8 @@ export async function reviewPullRequest(ev: PullRequestEvent, deps: ReviewPrDeps
               `- ${SEVERITY_ICON[f.severity]} \`${f.file}:${f.line}\` **${f.title}** — ${f.body}${citation(f, rules).replace(/\n\n/g, " ")}`,
           )
           .join("\n")
-      : "");
+      : "") +
+    (showStats ? `\n\n_${statsFooter({ costUsd: result.costUsd, ms, passes: result.passes })}_` : "");
 
   await octo.rest.pulls.createReview({
     owner,

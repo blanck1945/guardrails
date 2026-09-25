@@ -46,7 +46,9 @@ A review runs in one of three modes. The mechanical checks (`check:` rules) run 
 | Temperature | 0 | 0 | 0 |
 | Deadline | 120 s | 240 s | 240 s |
 
-Check findings are never capped or filtered. In `deep` the two passes run at the same time under the same deadline (`GUARDRAILS_REVIEW_TIMEOUT_SEC`, default 240, below the webhook's 300 s): if time runs out, what was obtained plus the check findings is published. The review summary states the mode used and why.
+Check findings are never capped or filtered. In `deep` the two passes run at the same time under the same deadline (`GUARDRAILS_REVIEW_TIMEOUT_SEC`, default 240, below the webhook's 300 s): if time runs out, what was obtained plus the check findings is published. The PR review summary is built by code with a fixed structure: a first line with the mode and why (`**Guardrails** · mode deep (label guardrails:deep)`), the counts by origin (`3 findings: 1 from checks, 2 from the model, 1 merged duplicate`), and at most two lines of the model's notes.
+
+One problem, one comment: in `deep`, findings of the two passes that share the file and the rule (or, without a rule, a similar title) are merged into one comment, whatever the distance between their lines; the body lists the other locations (`Also at lines 25, 31.`). Two different problems under one rule stay separate. Each finding is also moved to the added line that contains the code it quotes (backticks or quotes in the evidence, title or body, at least 8 characters); if nothing matches, the model's line is kept. Only added, commentable lines are ever chosen.
 
 ### Choosing the mode (highest priority first)
 
@@ -138,6 +140,7 @@ Loaded from the process environment or from `guardrails/.env.local` (never commi
 | `GUARDRAILS_LLM_CACHE=1` | Dev/eval only: replay identical model calls from disk. |
 | `GUARDRAILS_SKIP=1` | Skips the pre-push hook for one push. |
 | `GUARDRAILS_REVIEW_BUDGET_USD`, `GUARDRAILS_REVIEW_TIMEOUT_SEC` | Webhook only: replace the mode's spend cap; deadline of one review (default 240 s). |
+| `GUARDRAILS_SHOW_STATS=1` | Webhook only: adds a footer to the PR summary (`Cost ~US$0.02 · 38 s · 2 passes`). Off by default. The `review.analyzed` log always has mode, passes, tokens, cost and duration. |
 | `GUARDRAILS_BUDGET_USD` | Per-review budget used by the hook (default `0.50`). |
 | `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_WEBHOOK_SECRET` | GitHub App only; see `docs/github-app-setup.md`. |
 

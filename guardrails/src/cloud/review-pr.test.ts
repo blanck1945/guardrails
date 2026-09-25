@@ -265,3 +265,42 @@ describe("reviewPullRequest: dispose, budget, timeout", () => {
     expect(events("review.fallback")).toEqual([]);
   });
 });
+
+describe("reviewPullRequest: structured summary, stats and logs", () => {
+  const body = (t: { createReview: { mock: { calls: unknown[][] } } }) => (t.createReview.mock.calls[0]![0] as { body: string }).body;
+
+  it("builds the summary in code: header, counts by origin, then the model notes", async () => {
+    const t = setup();
+    await reviewPullRequest(ev, t.deps);
+    const parts = body(t).split("\n\n");
+    expect(parts[0]).toBe("**Guardrails** · mode standard (default)");
+    expect(parts[1]).toBe("1 finding: 0 from checks, 1 from the model");
+    expect(parts[2]).toBe("agent summary");
+  });
+
+  it("omits the stats footer by default and when the flag is not exactly 1", async () => {
+    for (const env of [{}, { GUARDRAILS_SHOW_STATS: "0" }, { GUARDRAILS_SHOW_STATS: "true" }]) {
+      const t = setup({ env });
+      await reviewPullRequest(ev, t.deps);
+      expect(body(t)).not.toContain("Cost ");
+    }
+  });
+
+  it("adds the stats footer with GUARDRAILS_SHOW_STATS=1", async () => {
+    const t = setup({ env: { GUARDRAILS_SHOW_STATS: "1" } });
+    await reviewPullRequest(ev, t.deps);
+    expect(body(t)).toMatch(/\n\n_Cost (~US\$\d+\.\d\d|n\/a) · \d+ s · 1 pass_$/);
+  });
+
+  it("review.analyzed logs passes, tokens, cost and duration", async () => {
+    const t = setup();
+    await reviewPullRequest(ev, t.deps);
+    const e = events("review.analyzed")[0]!;
+    expect(e).toMatchObject({ mode: "agent", passes: 1, passesFailed: 0, merged: 0 });
+    expect(e.inputTokens).toBeGreaterThan(0);
+    expect(e.outputTokens).toBeGreaterThan(0);
+    expect(e).toHaveProperty("cachedInputTokens");
+    expect(e).toHaveProperty("costUsd");
+    expect(typeof e.ms).toBe("number");
+  });
+});

@@ -3,6 +3,24 @@
 Each version has three parts: what we did, what we observed when we measured it, and what that made us do next.
 The "Next" of a version is the "What we did" of the following one. Newest first. See `CLAUDE.md` for the convention.
 
+## v0.7.2 — 2026-09-25
+### What we did
+- One problem, one comment. In `deep`, findings of the two passes are merged by meaning instead of by line distance: same file and same rule (or, without a rule, a similar title) is the same problem. Matching is one to one across passes, so two different problems under one rule that both passes report stay two, and findings of the same pass are never merged. The merged finding keeps the higher severity (ties: higher confidence), gets +0.1 confidence for being seen twice, unites the evidence and lists the other locations in its body ("Also at lines 25, 31."). The count of merged duplicates is returned (`merged`).
+- Precise anchors. Each finding is moved to the added line that contains the code it quotes (backtick or quoted text in the evidence notes, the title or the body; at least 8 characters; whitespace, CRLF and accents normalised). Several matches keep the model's line if it is one of them, otherwise the first; no match keeps the model's line. Only added, commentable lines are chosen. Snapping runs before the passes are merged, so both passes usually land on the same line.
+- Structured summary, produced by code: first line `**Guardrails** · mode <mode> (<source>)`, then `N findings: A from checks, B from the model` (plus merged duplicates), then at most two lines of the model's notes. Failure and cap notices are kept.
+- Cost visibility. `review.analyzed` now logs passes, passes failed, input/output/cached tokens, steps, costUsd (null without a price), ms and merged. New optional footer on the PR summary, `Cost ~US$0.02 · 38 s · 2 passes`, only with `GUARDRAILS_SHOW_STATS=1` (default off).
+- Tests use mock models only (merge shapes including the PR #5 case, idempotence, anchor cases, summary text, stats footer, log fields, one end-to-end deep case). The summary header format changed, so the four mode assertions of the cloud tests were updated.
+
+### What we observed
+Verification pending, script provided: `run-v072-verify.sh` (three real `deep` runs on the local clone of `causas-viewer`: `feat/case-reminders` twice and `feat/clients-page` once, US$0.10 cap per run). To be filled after running it. Expected: at most 4 comments for the 3 seeded problems, none duplicated; the business-day finding inside `useReminders.ts` lines 20-32, the Spanish comment at line 20, the heading in `ReminderList.tsx` line 11 or 12; the clean branch without findings.
+- Merge is decided without the model, so it is only as good as the rule ids and titles the passes produce; a finding without a rule and with a very different title in each pass will still appear twice.
+
+### Next (v0.7.3)
+- Record the real results of the v0.7.2 verification here (comments per problem, anchor lines, cost and time per run).
+- Read cost and duration of production reviews from the Vercel logs (`review.analyzed`, now with tokens and passes) and record them per mode.
+- Make `LocalWorkspace` read head files from the head revision (`git show`) instead of the working tree.
+- Judge the extra low-confidence findings of `deep` (are they noise?) and, if so, raise its confidence floor or require them to cite evidence lines.
+
 ## v0.7.1 — 2026-09-25
 ### What we did
 - Fix for the loss found in the v0.7.0 measurement: a partial mechanical check no longer silences the model. Checks now have a coverage. `exhaustive` (default for `max-lines`, `colocated-test`) fully decides the rule, so the model is told to skip it, as before. `partial` (default for `forbid-import`, `forbid-pattern`) only catches a subset of violations, so the rule stays in the model prompt (single and agent) and in the per-rule verdict pass, together with the locations the check already reported ("do not repeat these, but still look for violations the check cannot see").

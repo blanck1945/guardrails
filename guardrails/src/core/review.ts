@@ -14,6 +14,7 @@ import { emptyUsage, sumUsage, type UsageTotals } from "./agent/budget";
 import type { GuardrailsConfig } from "./config";
 import { capFindings, capFor, collapseByLocation } from "./findings/limits";
 import { verifyAbsenceClaims } from "./findings/verify";
+import { snapAnchors } from "./findings/anchor";
 import { ruleType } from "./rules/merge";
 import { stripUnknownRuleIds } from "./rules/select";
 import { buildSystemPrompt, buildUserPrompt } from "./prompt";
@@ -76,6 +77,12 @@ export interface ReviewOutput {
   /** Agent passes requested and how many of them failed (deep runs 2). */
   passes: number;
   passesFailed: number;
+  /** Duplicates folded into another finding across deep passes. */
+  merged: number;
+  /** Lower-priority findings left out because of the review cap. */
+  omitted: number;
+  /** The model's own notes (agent) or summary (single), before any composition. */
+  modelSummary: string;
 }
 
 function classifyModelFailure(err: unknown, signal?: AbortSignal): "budget" | "timeout" | "error" {
@@ -187,6 +194,9 @@ export async function reviewDiff(
     const omitted = capped.dropped.length;
     return { findings: capped.kept, dropped, omitted };
   };
+  const diffFiles = parseUnifiedDiff(input.diff);
+  // Each finding is moved to the added line that holds the text it quotes, before passes are merged.
+  const snap = <T extends Finding>(fs: T[]): T[] => snapAnchors(fs, diffFiles);
   const withOmitted = (summary: string, omitted: number) =>
     omitted ? `${summary}${summary ? " " : ""}(${omitted} lower-priority finding(s) omitted: over the review cap.)` : summary;
 
@@ -218,8 +228,9 @@ export async function reviewDiff(
           ruleChecks,
           focus,
           budget: { maxSteps: preset.maxSteps, maxInputTokens: preset.maxInputTokens },
-        });
+        }).then((r) => ({ ...r, findings: snap(r.findings) }));
       let run: AgentRunResult;
+      let merged = 0;
       let passesFailed = 0;
       if (preset.passes === 2) {
         // Two independent passes at once (same deadline). A pass that fails or times out is dropped if the other completed.
@@ -227,10 +238,12 @@ export async function reviewDiff(
         const done = settled.flatMap((s) => (s.status === "fulfilled" ? [s.value] : []));
         if (!done.length) throw (settled[0] as PromiseRejectedResult).reason;
         passesFailed = settled.length - done.length;
-        run = mergeRuns(done);
+        const union = mergeRuns(done);
+        merged = union.merged;
+        run = union;
       } else run = await runOne();
       const v = await verify(run.findings);
-      return { ...v, summary: run.notes ?? "", usage: run.usage, incomplete: run.incomplete, notes: run.notes, ruleChecks: run.ruleChecks, passesFailed, passes: preset.passes };
+      return { ...v, summary: run.notes ?? "", usage: run.usage, incomplete: run.incomplete, notes: run.notes, ruleChecks: run.ruleChecks, passesFailed, passes: preset.passes, merged };
     }
     const result = await generateText({
       model: resolveModel(model, { tracker: costTracker }),
@@ -243,8 +256,8 @@ ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
       abortSignal,
     });
     const usage = result.steps.length ? sumUsage(result.steps.map((s) => s.usage)) : emptyUsage();
-    const v = await verify(result.output.findings);
-    return { ...v, summary: result.output.summary, usage, incomplete: undefined, notes: undefined, ruleChecks: undefined, passesFailed: 0, passes: 1 };
+    const v = await verify(snap(result.output.findings));
+    return { ...v, summary: result.output.summary, usage, incomplete: undefined, notes: undefined, ruleChecks: undefined, passesFailed: 0, passes: 1, merged: 0 };
   };
 
   let part: Awaited<ReturnType<typeof modelPart>>;
@@ -255,7 +268,7 @@ ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
     // Without any check finding there is nothing to publish: the caller reports the failure as before.
     if (!checkFindings.length) throw err;
     failure = classifyModelFailure(err, abortSignal);
-    part = { findings: [], dropped: [], omitted: 0, summary: "", usage: emptyUsage(), incomplete: true, notes: undefined, ruleChecks: undefined, passesFailed: 0, passes: 1 };
+    part = { findings: [], dropped: [], omitted: 0, summary: "", usage: emptyUsage(), incomplete: true, notes: undefined, ruleChecks: undefined, passesFailed: 0, passes: 1, merged: 0 };
   }
   return {
     summary: withChecks(withOmitted(part.summary, part.omitted), failure, part.passesFailed),
@@ -271,6 +284,9 @@ ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
     ...(selection ? { modeSelection: selection } : {}),
     passes: part.passes,
     passesFailed: part.passesFailed,
+    merged: part.merged,
+    omitted: part.omitted,
+    modelSummary: part.summary,
     ...(failure ? { modelIncomplete: failure } : {}),
   };
 }

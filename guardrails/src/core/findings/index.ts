@@ -4,3 +4,4 @@ export * from "./dedupe";
 export * from "./sanitize";
 export * from "./verify";
 export * from "./limits";
+export * from "./anchor";

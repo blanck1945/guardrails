@@ -145,3 +145,20 @@ describe("deep: two passes", () => {
     expect(merged[0]!.evidence).toHaveLength(2);
   });
 });
+
+describe("deep: one problem, one comment, on the quoted line", () => {
+  const diff = ["--- a/src/a.ts", "+++ b/src/a.ts", "@@ -1,2 +1,9 @@", " head", "+// a", "+// b", "+// c", "+// d", "+// e", "+// f", "+export function addBusinessDays() {}", " tail", ""].join("\n");
+  it("merges the two passes and anchors to the line that holds the quoted code", async () => {
+    const mk = (line: number, title: string) => f({ line, title, ruleId: undefined, severity: "medium", confidence: 0.8, evidence: [{ file: "src/a.ts", startLine: line, endLine: line, note: "reimplements `export function addBusinessDays`" }] });
+    const model = new MockLanguageModelV4({
+      doGenerate: async (o) => {
+        const second = JSON.stringify(o.prompt).includes("Second-pass focus");
+        return report({ findings: [second ? mk(9, "Deadline helper duplicated in hook") : mk(2, "Business day helper duplicated in hook")], ruleChecks: [] });
+      },
+    });
+    const r = await reviewDiff({ ...input, diff }, { config: defaultConfig, model, mode: "agent", workspace: ws, reviewMode: { preset: MODE_PRESETS.deep } });
+    expect(r.findings).toHaveLength(1);
+    expect(r.findings[0]!.line).toBe(8);
+    expect(r.merged).toBe(1);
+  });
+});

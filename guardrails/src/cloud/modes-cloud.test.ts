@@ -123,14 +123,14 @@ describe("reviewPullRequest: review mode", () => {
     const s = scenario();
     await reviewPullRequest(ev, s.deps);
     expect(s.posted().comments).toHaveLength(0);
-    expect(s.posted().body).toContain("Review mode: standard (default).");
+    expect(s.posted().body).toContain("mode standard (default)");
   });
 
   it("label guardrails:deep applies the deep preset (confidence 0.4, 2 passes)", async () => {
     const s = scenario({ labels: ["bug", "Guardrails:Deep"] });
     await reviewPullRequest(ev, s.deps);
     expect(s.posted().comments).toHaveLength(1);
-    expect(s.posted().body).toContain("Review mode: deep (label guardrails:deep).");
+    expect(s.posted().body).toContain("mode deep (label guardrails:deep)");
     expect(s.model.doGenerateCalls).toHaveLength(2);
   });
 
@@ -143,12 +143,12 @@ describe("reviewPullRequest: review mode", () => {
   it("prOverride none ignores label and description (config comes from the base)", async () => {
     const s = scenario({ labels: ["guardrails:basic"], body: "guardrails-mode: basic", config: { prOverride: "none", mode: "deep" } });
     await reviewPullRequest(ev, s.deps);
-    expect(s.posted().body).toContain("Review mode: deep (config.json default).");
+    expect(s.posted().body).toContain("mode deep (config.json default)");
   });
 
   it("autoMode from the base config", async () => {
     const s = scenario({ config: { autoMode: [{ filesLessThan: 3, mode: "basic" }] } });
     await reviewPullRequest(ev, s.deps);
-    expect(s.posted().body).toContain("Review mode: basic (autoMode rule #1");
+    expect(s.posted().body).toContain("mode basic (autoMode rule #1");
   });
 });

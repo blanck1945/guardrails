@@ -69,3 +69,79 @@ export function dedupe<T extends FindingV2>(findings: T[], opts: DedupeOptions =
   }
   return kept.map((k) => k.f);
 }
+
+export const BOTH_PASSES_BOOST = 0.1;
+const ALSO_AT = /\bAlso at lines? \d/;
+
+/** Same problem seen by two different passes: by meaning (rule or title), not by line distance alone. */
+function sameProblem(a: FindingV2, b: FindingV2, minSimilarity: number, lineWindow: number): boolean {
+  if (a.file !== b.file) return false;
+  if (a.ruleId && a.ruleId === b.ruleId) return true;
+  const similar = jaccard(tokens(a.title), tokens(b.title)) >= minSimilarity;
+  if (!a.ruleId && !b.ruleId) return similar;
+  return similar && Math.abs(a.line - b.line) <= lineWindow;
+}
+
+export interface CrossPassMerge<T> {
+  findings: T[];
+  /** How many findings were folded into another one. */
+  merged: number;
+}
+
+/**
+ * Unions the findings of independent passes so that one problem yields one finding. Two findings of different
+ * passes are the same problem when they share the file and the rule (or, without a rule, a similar title),
+ * whatever the distance between their lines. Matching is one to one: two different problems under one rule
+ * that both passes report stay two, and findings of the same pass are never merged with each other.
+ * The merged finding keeps the higher severity (ties: higher confidence), gains +0.1 confidence for having been
+ * seen twice, unites the evidence and lists the other locations in its body ("Also at lines 25, 31.").
+ */
+export function mergeAcrossPasses<T extends FindingV2>(
+  passes: readonly (readonly T[])[],
+  opts: DedupeOptions = {},
+): CrossPassMerge<T> {
+  const { lineWindow = 3, minSimilarity = 0.5 } = opts;
+  const out: { f: T; seen: Set<number>; also: Set<number> }[] = [];
+  let merged = 0;
+  passes.forEach((list, pass) => {
+    for (const f of list) {
+      let best: (typeof out)[number] | undefined;
+      let bestScore = -Infinity;
+      for (const o of out) {
+        if (o.seen.has(pass) || !sameProblem(o.f, f, minSimilarity, lineWindow)) continue;
+        const score = jaccard(tokens(o.f.title), tokens(f.title)) - Math.abs(o.f.line - f.line) / 1000;
+        if (score > bestScore) {
+          best = o;
+          bestScore = score;
+        }
+      }
+      if (!best) {
+        out.push({ f, seen: new Set([pass]), also: new Set() });
+        continue;
+      }
+      merged++;
+      const wins = better(f, best.f) && !better(best.f, f);
+      const keep = wins ? f : best.f;
+      const other = wins ? best.f : f;
+      const ruleId = keep.ruleId ?? other.ruleId;
+      const firstMerge = best.seen.size === 1;
+      best.also.add(other.line);
+      best.also.add(best.f.line);
+      best.also.add(f.line);
+      best.f = {
+        ...keep,
+        evidence: mergeEvidence(best.f.evidence, f.evidence),
+        ...(ruleId ? { ruleId } : {}),
+        confidence: firstMerge ? Math.min(1, +(keep.confidence + BOTH_PASSES_BOOST).toFixed(2)) : keep.confidence,
+      };
+      best.seen.add(pass);
+    }
+  });
+  const findings = out.map((o) => {
+    const lines = [...o.also].filter((l) => l !== o.f.line).sort((a, b) => a - b);
+    if (!lines.length || ALSO_AT.test(o.f.body)) return o.f;
+    const note = `Also at line${lines.length > 1 ? "s" : ""} ${lines.join(", ")}.`;
+    return { ...o.f, body: `${o.f.body}\n\n${note}` };
+  });
+  return { findings, merged };
+}
