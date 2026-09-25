@@ -12,11 +12,23 @@ The "Next" of a version is the "What we did" of the following one. Newest first.
 - Tests use mock models only (merge shapes including the PR #5 case, idempotence, anchor cases, summary text, stats footer, log fields, one end-to-end deep case). The summary header format changed, so the four mode assertions of the cloud tests were updated.
 
 ### What we observed
-Verification pending, script provided: `run-v072-verify.sh` (three real `deep` runs on the local clone of `causas-viewer`: `feat/case-reminders` twice and `feat/clients-page` once, US$0.10 cap per run). To be filled after running it. Expected: at most 4 comments for the 3 seeded problems, none duplicated; the business-day finding inside `useReminders.ts` lines 20-32, the Spanish comment at line 20, the heading in `ReminderList.tsx` line 11 or 12; the clean branch without findings.
-- Merge is decided without the model, so it is only as good as the rule ids and titles the passes produce; a finding without a rule and with a very different title in each pass will still appear twice.
+Real verification, local CLI, `zai:glm-5.3`, temperature 0, `--mode deep`, `--budget-usd 0.10` per run, on the temporary clone of `causas-viewer` (base branch `base71` = `origin/main` plus the four `check:` lines; push disabled). Three runs: `feat/case-reminders` twice, `feat/clients-page` once.
 
+| Run | Findings (file:line, rule, origin) | Merged | Cost | Time | Steps |
+|---|---|---|---|---|---|
+| case-reminders 1 | useReminders.ts:20 english-code-spanish-ui (check); ReminderList.tsx:12 english-code-spanish-ui (model); useReminders.ts:21 deadline-logic-centralized (model) | 2 | 0.0426 | 39 s | 6 |
+| case-reminders 2 | useReminders.ts:20 (check); useReminders.ts:9 deadline-logic-centralized (model, "Also at line 21"); ReminderList.tsx:12 english-code-spanish-ui (model) | 2 | 0.0289 | 38 s | 5 |
+| clients-page (clean) | none | 0 | 0.0364 | 34 s | 8 |
+
+- **Goal met: one problem, one comment.** Both `deep` runs on the seeded branch produced 3 comments for the 3 problems (in production v0.7.1 the same PR got 6). The pass merge fired twice per run. No `dropped` findings, no extra low-confidence findings this time, and the clean branch has no findings.
+- **Anchors: 5 of 6 correct, one wrong.** Correct: the Spanish comment at line 20 (check) and the heading at line 12 in both runs, and the business-day logic at line 21 in run 1 (inside the function, lines 20 to 33). Wrong: in run 2 the merged business-day finding kept line 9, which is `businessDaysLeft: number;` in the interface. Cause: the snapper matched a quoted snippet (a fragment of the identifier `businessDays...`) against the first added line that contains it, and ignored the evidence ranges the model itself gave for that file (lines 21 to 33 and 20 to 35). The comment is still on the right file and explains the problem, but a reviewer would see it on an unrelated line.
+- Cost of `deep` on this small PR: US$0.029 to 0.043 (US$0.036 on the clean branch), 34 to 39 s, inside the estimate of US$0.03 to 0.05. Three runs are too few to give a range.
+- The "Also at line N" text is appended to the body after the schema limit of 1500 characters was applied, so a merged body can exceed it.
+- Merge is decided without the model, so it is only as good as the rule ids and titles the passes produce; a finding without a rule and with a very different title in each pass will still appear twice.
 ### Next (v0.7.3)
-- Record the real results of the v0.7.2 verification here (comments per problem, anchor lines, cost and time per run).
+- Fix the anchor defect: prefer the evidence ranges of the finding's own file. Snap to a snippet match only when it falls inside one of those ranges (or, without ranges, when it is the only match); otherwise use the first added line of the best evidence range. Add a test with the interface-line case of run 2.
+- Re-apply the body length limit after merging (or cap the "Also at" list).
+- Repeat the case-reminders `deep` run several times to see how often the anchor and the merge hold.
 - Read cost and duration of production reviews from the Vercel logs (`review.analyzed`, now with tokens and passes) and record them per mode.
 - Make `LocalWorkspace` read head files from the head revision (`git show`) instead of the working tree.
 - Judge the extra low-confidence findings of `deep` (are they noise?) and, if so, raise its confidence floor or require them to cite evidence lines.
