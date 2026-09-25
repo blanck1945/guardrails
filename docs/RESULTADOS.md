@@ -2,7 +2,7 @@
 
 Qué salió bien y qué salió mal en **todas** las mediciones hechas hasta la v0.7.1, en un solo lugar. Es un resumen: el detalle de cada versión está en `guardrails/CHANGELOG.md` (sección *What we observed*), y el porqué de cada decisión en `DECISIONS.md`.
 
-Actualizado: 2026-09-25 (producción en la v0.7.1; v0.7.2 verificada en local, pendiente de subir).
+Actualizado: 2026-09-25 (producción en la v0.7.2; v0.7.3 verificada en local, pendiente de subir).
 
 ---
 
@@ -14,7 +14,7 @@ Actualizado: 2026-09-25 (producción en la v0.7.1; v0.7.2 verificada en local, p
 | Detectar un bug de lógica sin regla | ✅ Bien, pero con **un solo caso** | El comparador que ordena mal las causas sin plazo: 4 de 4 corridas lo encontraron |
 | No inventar problemas en PRs limpios | ✅ Bien | 0 hallazgos en 9 corridas sobre PRs limpios |
 | Ruido en PRs con problemas | ✅ Mejoró | Un falso positivo real (corregido) y los **duplicados de `deep` resueltos en la v0.7.2** (3 comentarios para 3 problemas, antes 6). Sin juzgar: hallazgos extra de baja confianza de `deep` en corridas anteriores |
-| Precisión de la línea del comentario | ⚠️ Mejorable | 5 de 6 anclas correctas en la v0.7.2; una cayó en una línea ajena (defecto conocido, v0.7.3) |
+| Precisión de la línea del comentario | ✅ Bien | 9 de 9 anclas correctas en la v0.7.3 (en la v0.7.2 eran 5 de 6). Queda validar las ubicaciones extra que se listan al unir duplicados |
 | Repetibilidad (mismo resultado dos veces) | ⚠️ Parcial | Los chequeos mecánicos son idénticos entre corridas; los hallazgos del modelo cambian de línea, severidad y confianza |
 | Costo | ✅ Bajo, con dudas | Unos $0.004 a $0.018 por review estándar, $0.03 a $0.05 en `deep`. **Son estimaciones**, no lo que factura Z.ai |
 | Velocidad | ✅ Aceptable | 13 a 63 s por review; 50 s de la etiqueta a la revisión en producción |
@@ -82,6 +82,18 @@ Total: **6 de 7 ubicaciones sembradas, 0 falsos positivos, 0 hallazgos extra.** 
 - ⚠️ **Ancla incorrecta:** el anclaje por texto citado coincidió con un fragmento de un identificador en una línea de la interfaz, e ignoró los rangos de evidencia que dio el propio modelo. Está anotado para la v0.7.3.
 - El costo de `deep` en un PR chico quedó entre $0.029 y $0.043, dentro de lo estimado. Son 3 corridas: no es un rango.
 
+### M8 — Verificación de la v0.7.3 en modo `deep` (local, 5 corridas, $0.144)
+| Corrida | Resultado | Costo |
+|---|---|---|
+| Recordatorios 1, 2 y 3 | 3 comentarios para 3 problemas en cada una, sin duplicados, **9 de 9 anclas correctas** | $0.022 a $0.025 |
+| Exportar CSV | Los 2 problemas por chequeo, en su lugar; más 2 hallazgos extra de baja confianza sin juzgar | $0.040 |
+| Clientes (limpio) | 0 hallazgos | $0.034 |
+
+- ✅ El defecto de la línea ajena (línea 9 en vez de la 21) no reapareció: el anclaje ahora respeta los rangos de evidencia del modelo.
+- ✅ Un hallazgo del modelo que repetía el comentario ya detectado por el chequeo se descartó como duplicado.
+- ⚠️ En una corrida, el texto "Also at line 10" del encabezado apunta a una línea que no es el encabezado: las ubicaciones extra no se validan.
+- ⚠️ `deep` sigue agregando hallazgos extra de baja confianza (2 en CSV) que no estaban sembrados. No se sabe si son ruido o algo útil.
+
 ### M6 — `guardrails init` (derivar reglas de un repo)
 | Repo | Reglas propuestas | Descartadas por ya estar cubiertas | Tiempo | Costo |
 |---|---|---|---|---|
@@ -106,7 +118,7 @@ Se pierden unas 12 reglas de menor prioridad por el tope de 15. Los scopes que s
 - Un **chequeo parcial** se toma como si cubriera toda la regla (regresión de la v0.7.0, corregida).
 - El modelo **afirma una ausencia sin comprobarla** ("no existe el test"). Se corrigió con una verificación contra el repo.
 - **Dos pasadas** analizan lo mismo: aparecían duplicados (`deep`; resuelto en la v0.7.2).
-- El **anclaje por texto** se confunde con fragmentos de identificadores y mueve el comentario a una línea ajena (1 de 6 en la v0.7.2).
+- El **anclaje por texto** se confundía con fragmentos de identificadores y movía el comentario a una línea ajena (1 de 6 en la v0.7.2; resuelto en la v0.7.3).
 - El modelo **inventa el identificador de una regla**: antes se perdía el hallazgo, ahora se conserva sin la etiqueta.
 - El proveedor cambia la salida: Z.ai borraba el texto `json` en modo JSON.
 
@@ -124,7 +136,7 @@ Se pierden unas 12 reglas de menor prioridad por el tope de 15. Los scopes que s
 | Comentario en español no detectado | v0.6.1 | ✅ Resuelto |
 | Regresión del encabezado sin acentos | v0.7.1 | ✅ Resuelto |
 | Duplicados en `deep` | v0.7.2 | ✅ Resuelto en local (pendiente de subir) |
-| Ancla en una línea ajena (1 de 6) | v0.7.3 | 🔄 Anotado |
+| Ancla en una línea ajena (1 de 6) | v0.7.3 | ✅ Resuelto en local (pendiente de subir) |
 | Un subagente cortado por límite de sesión de Anthropic | — | ✅ Se retomó sin repetir trabajo |
 | Subagente bloqueado dos veces por el clasificador de permisos | — | ✅ Se resolvió con la autorización explícita del usuario |
 
@@ -142,4 +154,4 @@ Se pierden unas 12 reglas de menor prioridad por el tope de 15. Los scopes que s
 
 ## 6. Conclusión
 
-Para reglas concretas y PRs chicos el producto funciona y no inventa problemas. Los fallos encontrados se detectaron midiendo y se corrigieron rápido, salvo la precisión de la línea del comentario en `deep`, que está anotada para la v0.7.3. Lo que falta para decir "todo bien" con confianza es medir con **casos reales** y con **un modelo de producción**, y mirar el **costo real** en el panel de Z.ai.
+Para reglas concretas y PRs chicos el producto funciona y no inventa problemas. Los fallos encontrados se detectaron midiendo y se corrigieron rápido, salvo los hallazgos extra de baja confianza de `deep`, que no se sabe si aportan. Lo que falta para decir "todo bien" con confianza es medir con **casos reales** y con **un modelo de producción**, y mirar el **costo real** en el panel de Z.ai.

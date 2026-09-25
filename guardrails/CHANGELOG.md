@@ -11,10 +11,24 @@ The "Next" of a version is the "What we did" of the following one. Newest first.
 - Tests (mock models only): the exact failing shape (line 9 interface field against a function at 21 to 33 with ranges 21-33 and 20-35), snippet inside the range, several matches, no match, tied ranges, model line inside a range, non-added lines, no ranges, ranges of other files, CRLF and accents, merge preference, 30 extra locations, over-long body. Three older fixtures whose evidence ranges did not match their own line were corrected.
 
 ### What we observed
-Verification pending: the script `run-v073-verify.sh` (three runs of `feat/case-reminders`, one of `feat/csv-export`, one of `feat/clients-page`, all `deep`) is provided and is run by the orchestrator; results are added here afterwards.
+Real verification, local CLI, `zai:glm-5.3`, temperature 0, `--mode deep`, `--budget-usd 0.10` per run, on the temporary clone of `causas-viewer` (base branch `base71` = `origin/main` plus the four `check:` lines; push disabled). Five runs.
 
+| Run | Findings (file:line, origin) | Merged | Dropped | Cost | Time |
+|---|---|---|---|---|---|
+| case-reminders 1 | useReminders.ts:20 (check); useReminders.ts:21 (model); ReminderList.tsx:12 (model) | 2 | 0 | 0.0238 | 34 s |
+| case-reminders 2 | useReminders.ts:20 (check); useReminders.ts:20 (model, "Also at line 21"); ReminderList.tsx:12 (model, "Also at line 10") | 2 | 1 duplicate of the check finding | 0.0219 | 37 s |
+| case-reminders 3 | useReminders.ts:20 (check); useReminders.ts:21 (model, "Also at line 22"); ReminderList.tsx:11 (model, "Also at line 12") | 2 | 0 | 0.0246 | 39 s |
+| csv-export | CaseExportButton.tsx:1 layered-data-access (check); csv.ts:1 colocated-tests (check); CaseExportButton.tsx:9 (model, low, 0.6); csv.ts:18 (model, low, 0.4) | 0 | 0 | 0.0396 | n/a |
+| clients-page (clean) | none | 0 | 0 | 0.0337 | n/a |
+
+- **Anchor defect fixed: 9 of 9 anchors correct on case-reminders.** The Spanish comment at line 20 in all runs (check), the business-day logic inside the function (lines 20 to 22, all within 20 to 33; in v0.7.2 one run had it on line 9, an interface field), and the heading at line 11 or 12. No duplicates: 3 comments for 3 problems in each run, with 2 merges per run.
+- **The dedupe against checks worked:** in run 2 a model finding about the same Spanish comment (line 19, conf 0.97) was dropped as a duplicate of the check finding.
+- **csv-export:** both seeded problems reported by the checks, at the expected places (the import at line 1, `csv.ts` without a test). Two extra low-confidence model findings ("export ignores the active case filters", "serializes the raw English status enum while headers are Spanish") that are not in the answer key; not judged. They are the kind of extras `deep` already produced in v0.7.0.
+- **Clean branch:** no findings.
+- Cost of `deep`: US$0.022 to 0.025 per review on case-reminders, US$0.034 on the clean branch and US$0.040 on csv-export; total US$0.144 for the five runs. Lower than the v0.7.2 runs on the same PR (0.029 to 0.043); three runs each, so no trend is claimed.
+- The merged heading finding in run 2 lists "Also at line 10", a location that is not the heading. The merged extra locations come from the second pass and are not validated against the evidence; the primary anchors are.
 ### Next (v0.7.4)
-- Record the v0.7.3 verification (anchors in 9 of 9 on case-reminders, no duplicates, csv-export with two comments, clients-page clean) and act on any range the model got wrong.
+- Validate the extra locations listed in "Also at" against the evidence ranges (the heading finding of run 2 listed line 10, which is not the heading).
 - Read cost and duration of production reviews from the Vercel logs and record them per mode.
 - Make `LocalWorkspace` read head files from the head revision (`git show`) instead of the working tree.
 - Judge the extra low-confidence findings of `deep` and, if they are noise, raise its confidence floor or require evidence lines.
