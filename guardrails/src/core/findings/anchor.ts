@@ -25,10 +25,22 @@ function candidateSnippets(f: Anchorable): string[] {
   return [...new Set(sources.flatMap(quotedSnippets))];
 }
 
+interface Range {
+  start: number;
+  end: number;
+  note: string;
+}
+
+const words = (s: string): Set<string> => new Set(norm(s).toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2));
+
 /**
  * Moves a finding to the added line that contains the text it quotes (evidence notes, title, body), instead of
  * trusting the model's line number. Only lines added by the diff and accepted for inline comments are chosen.
- * Several matching lines: the model's own line if it is one of them, otherwise the first. No match: unchanged.
+ * Evidence ranges of the finding's own file come first: a snippet match counts only inside one of them (the model's
+ * line if it is one of those matches, otherwise the first); with no such match, the model's line is kept when it is
+ * an added line inside a range, otherwise the first added line of the best range (the one whose note shares the most
+ * words with the title). Without usable ranges: the model's line if it is one of the matches, otherwise the first.
+ * No match at all: unchanged.
  */
 export function snapToQuotedLine<T extends Anchorable>(finding: T, files: readonly FileDiff[]): T {
   const file = files.find((d) => d.path === finding.file);
@@ -40,14 +52,44 @@ export function snapToQuotedLine<T extends Anchorable>(finding: T, files: readon
       if (l.type === "add" && l.newLine !== null && commentable.has(l.newLine)) added.push({ line: l.newLine, text: norm(l.content) });
     }
   }
-  for (const snippet of candidateSnippets(finding)) {
-    const hits = added.filter((a) => a.text.includes(snippet)).map((a) => a.line);
-    if (!hits.length) continue;
-    const line = hits.includes(finding.line) ? finding.line : hits[0]!;
+  const move = (line: number): T => {
     if (line === finding.line) return finding;
     const { startLine: _drop, ...rest } = finding;
     void _drop;
     return { ...rest, line } as T;
+  };
+  const ranges: Range[] = (finding.evidence ?? [])
+    .filter((e) => e.file === finding.file)
+    .map((e) => ({ start: Math.min(e.startLine, e.endLine), end: Math.max(e.startLine, e.endLine), note: e.note }))
+    .filter((r) => added.some((a) => a.line >= r.start && a.line <= r.end));
+  const inRange = (l: number): boolean => ranges.some((r) => l >= r.start && l <= r.end);
+  const snippets = candidateSnippets(finding);
+
+  if (ranges.length) {
+    for (const snippet of snippets) {
+      const hits = added.filter((a) => inRange(a.line) && a.text.includes(snippet)).map((a) => a.line);
+      if (hits.length) return move(hits.includes(finding.line) ? finding.line : hits[0]!);
+    }
+    if (added.some((a) => a.line === finding.line) && inRange(finding.line)) return finding;
+    const title = words(finding.title);
+    let best = ranges[0]!;
+    let bestScore = -1;
+    for (const r of ranges) {
+      let score = 0;
+      for (const w of words(r.note)) if (title.has(w)) score++;
+      if (score > bestScore) {
+        best = r;
+        bestScore = score;
+      }
+    }
+    const first = added.find((a) => a.line >= best.start && a.line <= best.end)!;
+    return move(first.line);
+  }
+
+  for (const snippet of snippets) {
+    const hits = added.filter((a) => a.text.includes(snippet)).map((a) => a.line);
+    if (!hits.length) continue;
+    return move(hits.includes(finding.line) ? finding.line : hits[0]!);
   }
   return finding;
 }

@@ -3,6 +3,22 @@
 Each version has three parts: what we did, what we observed when we measured it, and what that made us do next.
 The "Next" of a version is the "What we did" of the following one. Newest first. See `CLAUDE.md` for the convention.
 
+## v0.7.3 — 2026-09-25
+### What we did
+- Anchors respect the model's evidence ranges. For a finding, the ranges of its own file come first: a quoted snippet moves the anchor only when the match falls inside one of them (the model's line if it is one of those matches, otherwise the first). With no match inside a range, the model's line is kept when it is an added, commentable line inside a range; otherwise the anchor goes to the first added line of the best range (the one whose note shares the most words with the title; ties: the first). Ranges without any added commentable line are ignored, and without usable ranges the v0.7.2 behaviour is unchanged. This fixes the interface line (`businessDaysLeft: number;`, line 9) chosen over the function at lines 21 to 33.
+- Merged findings prefer an anchor inside an evidence range (of either pass) over higher severity or confidence; those remain the tie-break.
+- The merged body never exceeds the schema limit of 1500 characters: at most 6 extra locations are listed ("Also at lines 1, 2, 3, 4, 5, 6 and 24 more."), and only then the original text is truncated with an ellipsis (never the "Also at" line). Idempotent.
+- Tests (mock models only): the exact failing shape (line 9 interface field against a function at 21 to 33 with ranges 21-33 and 20-35), snippet inside the range, several matches, no match, tied ranges, model line inside a range, non-added lines, no ranges, ranges of other files, CRLF and accents, merge preference, 30 extra locations, over-long body. Three older fixtures whose evidence ranges did not match their own line were corrected.
+
+### What we observed
+Verification pending: the script `run-v073-verify.sh` (three runs of `feat/case-reminders`, one of `feat/csv-export`, one of `feat/clients-page`, all `deep`) is provided and is run by the orchestrator; results are added here afterwards.
+
+### Next (v0.7.4)
+- Record the v0.7.3 verification (anchors in 9 of 9 on case-reminders, no duplicates, csv-export with two comments, clients-page clean) and act on any range the model got wrong.
+- Read cost and duration of production reviews from the Vercel logs and record them per mode.
+- Make `LocalWorkspace` read head files from the head revision (`git show`) instead of the working tree.
+- Judge the extra low-confidence findings of `deep` and, if they are noise, raise its confidence floor or require evidence lines.
+
 ## v0.7.2 — 2026-09-25
 ### What we did
 - One problem, one comment. In `deep`, findings of the two passes are merged by meaning instead of by line distance: same file and same rule (or, without a rule, a similar title) is the same problem. Matching is one to one across passes, so two different problems under one rule that both passes report stay two, and findings of the same pass are never merged. The merged finding keeps the higher severity (ties: higher confidence), gets +0.1 confidence for being seen twice, unites the evidence and lists the other locations in its body ("Also at lines 25, 31."). The count of merged duplicates is returned (`merged`).

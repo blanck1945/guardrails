@@ -50,6 +50,8 @@ Check findings are never capped or filtered. In `deep` the two passes run at the
 
 One problem, one comment: in `deep`, findings of the two passes that share the file and the rule (or, without a rule, a similar title) are merged into one comment, whatever the distance between their lines; the body lists the other locations (`Also at lines 25, 31.`). Two different problems under one rule stay separate. Each finding is also moved to the added line that contains the code it quotes (backticks or quotes in the evidence, title or body, at least 8 characters); if nothing matches, the model's line is kept. Only added, commentable lines are ever chosen.
 
+Anchors follow the model's own evidence ranges: for a finding, only ranges of the same file count. A quoted snippet moves the anchor only when it falls inside one of those ranges; if it does not, the model's line is kept when it is already an added line inside a range, otherwise the anchor goes to the first added line of the best range. Without ranges the rule above applies unchanged. When the two `deep` passes are merged, the candidate whose line lies inside an evidence range wins over the one that does not. The merged body stays within the 1500-character schema limit: at most 6 extra locations are listed (`and K more.`) and, if needed, the original text is truncated, never the `Also at` line.
+
 ### Choosing the mode (highest priority first)
 
 1. CLI: `guardrails review --mode basic|standard|deep`.

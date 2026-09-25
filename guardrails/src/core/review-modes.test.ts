@@ -136,8 +136,8 @@ describe("deep: two passes", () => {
   });
 
   it("mergeFindings boosts once, keeps the stronger version and unions evidence", () => {
-    const a = { ...f({ severity: "low", confidence: 0.5 }), evidence: [{ file: "src/a.ts", startLine: 1, endLine: 1, note: "a" }] } as never;
-    const b = { ...f({ severity: "high", confidence: 0.6, line: 3 }), evidence: [{ file: "src/a.ts", startLine: 2, endLine: 2, note: "b" }] } as never;
+    const a = { ...f({ severity: "low", confidence: 0.5 }), evidence: [{ file: "src/a.ts", startLine: 2, endLine: 2, note: "a" }] } as never;
+    const b = { ...f({ severity: "high", confidence: 0.6, line: 3 }), evidence: [{ file: "src/a.ts", startLine: 3, endLine: 3, note: "b" }] } as never;
     const merged = mergeFindings([[a], [b]]);
     expect(merged).toHaveLength(1);
     expect(merged[0]).toMatchObject({ severity: "high", line: 3 });
@@ -149,7 +149,7 @@ describe("deep: two passes", () => {
 describe("deep: one problem, one comment, on the quoted line", () => {
   const diff = ["--- a/src/a.ts", "+++ b/src/a.ts", "@@ -1,2 +1,9 @@", " head", "+// a", "+// b", "+// c", "+// d", "+// e", "+// f", "+export function addBusinessDays() {}", " tail", ""].join("\n");
   it("merges the two passes and anchors to the line that holds the quoted code", async () => {
-    const mk = (line: number, title: string) => f({ line, title, ruleId: undefined, severity: "medium", confidence: 0.8, evidence: [{ file: "src/a.ts", startLine: line, endLine: line, note: "reimplements `export function addBusinessDays`" }] });
+    const mk = (line: number, title: string) => f({ line, title, ruleId: undefined, severity: "medium", confidence: 0.8, evidence: [{ file: "src/a.ts", startLine: 2, endLine: 8, note: "reimplements `export function addBusinessDays`" }] });
     const model = new MockLanguageModelV4({
       doGenerate: async (o) => {
         const second = JSON.stringify(o.prompt).includes("Second-pass focus");

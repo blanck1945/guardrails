@@ -101,7 +101,7 @@ describe("reviewDiff with partial and exhaustive checks", () => {
   });
 
   it("still drops a model finding that repeats a check finding (same file, rule and nearby line)", async () => {
-    const dup = llmFinding({ line: 3, title: "Accent in comment" });
+    const dup = llmFinding({ line: 3, title: "Accent in comment", evidence: [{ file: "src/List.tsx", startLine: 3, endLine: 3, note: "x" }] });
     const r = await reviewDiff(input, { config, model: modelWith([dup]), mode: "agent", workspace: ws });
     expect(r.findings.map((f) => f.origin)).not.toContain("llm");
     expect(r.dropped.map((d) => d.reason)).toEqual(["duplicate"]);

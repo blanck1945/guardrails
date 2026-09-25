@@ -82,6 +82,22 @@ function sameProblem(a: FindingV2, b: FindingV2, minSimilarity: number, lineWind
   return similar && Math.abs(a.line - b.line) <= lineWindow;
 }
 
+/** Schema limit of a finding body. */
+export const MAX_BODY_CHARS = 1500;
+/** Extra locations listed in the "Also at" line; the rest is summarised as "and K more". */
+export const MAX_ALSO_AT = 6;
+
+/** Appends "Also at line(s) ..." (at most 6 locations, then "and K more.") and keeps the whole body within the schema limit by truncating the original text, never the note. */
+function withAlsoAt(body: string, lines: readonly number[]): string {
+  const shown = lines.slice(0, MAX_ALSO_AT);
+  const more = lines.length - shown.length;
+  const list = more > 0 ? `${shown.join(", ")} and ${more} more` : shown.join(", ");
+  const note = `Also at line${lines.length > 1 ? "s" : ""} ${list}.`;
+  const room = MAX_BODY_CHARS - note.length - 2;
+  const text = body.length <= room ? body : `${body.slice(0, Math.max(0, room - 1)).trimEnd()}…`;
+  return `${text}\n\n${note}`;
+}
+
 export interface CrossPassMerge<T> {
   findings: T[];
   /** How many findings were folded into another one. */
@@ -120,7 +136,11 @@ export function mergeAcrossPasses<T extends FindingV2>(
         continue;
       }
       merged++;
-      const wins = better(f, best.f) && !better(best.f, f);
+      const ranges = [...best.f.evidence, ...f.evidence];
+      const inRange = (x: T): boolean => ranges.some((e) => e.file === x.file && x.line >= Math.min(e.startLine, e.endLine) && x.line <= Math.max(e.startLine, e.endLine));
+      const fIn = inRange(f);
+      const bIn = inRange(best.f);
+      const wins = fIn !== bIn ? fIn : better(f, best.f) && !better(best.f, f);
       const keep = wins ? f : best.f;
       const other = wins ? best.f : f;
       const ruleId = keep.ruleId ?? other.ruleId;
@@ -140,8 +160,7 @@ export function mergeAcrossPasses<T extends FindingV2>(
   const findings = out.map((o) => {
     const lines = [...o.also].filter((l) => l !== o.f.line).sort((a, b) => a - b);
     if (!lines.length || ALSO_AT.test(o.f.body)) return o.f;
-    const note = `Also at line${lines.length > 1 ? "s" : ""} ${lines.join(", ")}.`;
-    return { ...o.f, body: `${o.f.body}\n\n${note}` };
+    return { ...o.f, body: withAlsoAt(o.f.body, lines) };
   });
   return { findings, merged };
 }
