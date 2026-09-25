@@ -1,0 +1,131 @@
+# Guardrails — tablero de resultados
+
+Qué salió bien y qué salió mal en **todas** las mediciones hechas hasta la v0.7.1, en un solo lugar. Es un resumen: el detalle de cada versión está en `guardrails/CHANGELOG.md` (sección *What we observed*), y el porqué de cada decisión en `DECISIONS.md`.
+
+Actualizado: 2026-09-25 (producción en la v0.7.1; v0.7.2 en curso).
+
+---
+
+## 1. Veredicto en una tabla
+
+| Dimensión | Estado | Evidencia resumida |
+|---|---|---|
+| Detectar violaciones de reglas claras | ✅ Bien | 6 de 6 en los escenarios locales; 6 de 7 ubicaciones en la nube (v0.6.0); 3 de 3 en la última prueba en producción |
+| Detectar un bug de lógica sin regla | ✅ Bien, pero con **un solo caso** | El comparador que ordena mal las causas sin plazo: 4 de 4 corridas lo encontraron |
+| No inventar problemas en PRs limpios | ✅ Bien | 0 hallazgos en 9 corridas sobre PRs limpios |
+| Ruido en PRs con problemas | ⚠️ Mejorable | Un falso positivo real (ya corregido), hallazgos extra de baja confianza sin juzgar, y **duplicados en modo `deep`** |
+| Repetibilidad (mismo resultado dos veces) | ⚠️ Parcial | Los chequeos mecánicos son idénticos entre corridas; los hallazgos del modelo cambian de línea, severidad y confianza |
+| Costo | ✅ Bajo, con dudas | Unos $0.004 a $0.018 por review estándar, $0.03 a $0.05 en `deep`. **Son estimaciones**, no lo que factura Z.ai |
+| Velocidad | ✅ Aceptable | 13 a 63 s por review; 50 s de la etiqueta a la revisión en producción |
+| Robustez operativa | ✅ Con incidentes resueltos | Ver sección 4 |
+| Calidad con un modelo de producción real (Claude) | ❓ **Sin medir** | Todo se midió con GLM |
+| Bugs reales de repos reales | ❓ **Sin medir** | La Fase 0 con casos reales (B11 a B17) sigue pendiente |
+
+---
+
+## 2. Cada medición
+
+### M1 — Escenarios locales, 7 cambios de una línea (v0.4.x, después v0.5.1)
+Repo de prueba de gestión de causas. Una rama por escenario.
+
+| Escenario | Esperado | Resultado |
+|---|---|---|
+| Renombrar una constante | 0 hallazgos | ✅ 0 |
+| Comentario en español en el código | marcarlo | ✅ |
+| Texto de interfaz escrito directo en un componente | marcarlo | ✅ |
+| Texto nuevo en español dentro de `es.ts` | **no** marcarlo | ✅ 0 |
+| Un componente usa `localStorage` | marcarlo | ✅, pero **4 hallazgos y 1 falso positivo** (dijo que faltaba un test que sí existía) |
+| Lógica de días hábiles dentro de un hook | marcarlo | ✅ (más 1 hallazgo genérico extra) |
+| Componente nuevo sin test | marcarlo | ✅ |
+
+Tras la versión 0.5.1: el caso del `localStorage` bajó de 4 a 1 hallazgo, el falso positivo desapareció y el tipo del hallazgo pasó a ser coherente con la regla. Costo de toda la ronda: unos $0.036.
+
+### M2 — La nube, 6 PRs sembrados (v0.6.0, una corrida cada uno)
+| PR | Contenido | Resultado |
+|---|---|---|
+| Clientes | limpio | ✅ 0 hallazgos |
+| Plazos próximos | limpio | ✅ 0 hallazgos |
+| Exportar CSV | 2 problemas | ✅ 2 de 2 |
+| Recordatorios | 3 ubicaciones de 2 problemas | ⚠️ **2 de 3**: no vio el comentario en español |
+| Ordenar por plazo | 1 bug de lógica | ✅ encontrado y explicado |
+| Notas y checklist | 1 archivo de 156 líneas | ✅ encontrado |
+
+Total: **6 de 7 ubicaciones sembradas, 0 falsos positivos, 0 hallazgos extra.** El fallo fue una omisión del modelo (`dropped` vacío al reproducirlo), no de nuestro filtro.
+
+### M3 — Re-medición local de la v0.7.0 (15 corridas, $0.275)
+- **Limpios** (modos `basic` y `standard`): 0 hallazgos en las 4 corridas ✅
+- **Comentario en español:** detectado por el chequeo mecánico en todas las corridas ✅, siempre idéntico entre corridas
+- **Bug del comparador:** detectado en `standard` (2 de 2) y en `deep` ✅
+- ❌ **Regresión:** el encabezado en español sin acentos (`Recordatorios`) dejó de detectarse **en todos los modos**. La causa fue una decisión de diseño propia: se asumió que un chequeo cubre toda su regla.
+- ⚠️ `deep` costó 3 a 4 veces más que `standard` y agregó 5 hallazgos de baja confianza que no se juzgaron.
+
+### M4 — Verificación de la corrección v0.7.1 (local, $0.029)
+- `case-reminders`: **3 hallazgos**, incluido el encabezado `Recordatorios` ✅ (lo reporta el modelo; el comentario, el chequeo)
+- `clients-page` (limpio): **0 hallazgos** ✅
+
+### M5 — Producción v0.7.1, modo `deep` por etiqueta (PR de recordatorios)
+- ✅ La etiqueta `guardrails:deep` disparó una revisión nueva en 50 s, y el resumen indicó el modo y su origen
+- ✅ Encontró los 3 problemas sembrados (todos por el modelo, porque el `rules.md` de producción no tiene líneas `check:`)
+- ❌ **6 comentarios para 3 problemas:** dos problemas salieron duplicados, porque las dos pasadas de `deep` apuntaron a líneas distintas (7 de diferencia) y el filtro de duplicados solo mira 3
+- ⚠️ Ningún ancla cayó en la línea real
+- ⚠️ El resumen mostraba las notas internas del modelo
+
+### M6 — `guardrails init` (derivar reglas de un repo)
+| Repo | Reglas propuestas | Descartadas por ya estar cubiertas | Tiempo | Costo |
+|---|---|---|---|---|
+| App de causas | 5 | 4 (no-console, no-any, TypeScript estricto, hooks) | 14 s | $0.0005 |
+| claudeStarter (ronda inicial) | 26 | 2 | varios minutos | $0.011 |
+| claudeStarter (tras los arreglos) | 13 a 15 (tope) | — | 13 a 27 s | $0.003 a $0.026 |
+
+Se pierden unas 12 reglas de menor prioridad por el tope de 15. Los scopes que salían recortados (`seeds.config.` sin `json`) se arreglaron y ahora se validan contra los archivos reales del repo.
+
+---
+
+## 3. Cuándo pasa bien y cuándo mal (patrones)
+
+**Pasa bien cuando:**
+- La regla es concreta y verificable en el diff: un comentario en español, un archivo largo, un import prohibido, un test que falta.
+- El PR es chico o limpio: no inventa problemas.
+- Hay un bug de lógica localizable (un comparador mal escrito): lo encuentra y explica la causa.
+- La regla se puede comprobar con código: da siempre el mismo resultado.
+
+**Pasa mal cuando:**
+- Una regla tiene **varias ubicaciones** y el modelo se conforma con la primera (comentario en español, v0.6.0).
+- Un **chequeo parcial** se toma como si cubriera toda la regla (regresión de la v0.7.0, corregida).
+- El modelo **afirma una ausencia sin comprobarla** ("no existe el test"). Se corrigió con una verificación contra el repo.
+- **Dos pasadas** analizan lo mismo: aparecen duplicados (`deep`, pendiente en la v0.7.2).
+- El modelo **inventa el identificador de una regla**: antes se perdía el hallazgo, ahora se conserva sin la etiqueta.
+- El proveedor cambia la salida: Z.ai borraba el texto `json` en modo JSON.
+
+---
+
+## 4. Incidentes y su estado
+
+| Incidente | Versión del arreglo | Estado |
+|---|---|---|
+| Violación de regla descartada por ser de tipo `style` | v0.4.0 | ✅ Resuelto |
+| Hallazgos perdidos por `ruleId` inventado | v0.4.0 | ✅ Resuelto |
+| Nombres recortados (`.json`) por el modo JSON de Z.ai | v0.4.0 | ✅ Resuelto |
+| `init` de varios minutos | v0.4.0 | ✅ Resuelto (13 a 27 s) |
+| Falsos positivos por afirmar que falta un archivo | v0.5.1 | ✅ Resuelto (verificación contra el repo) |
+| Comentario en español no detectado | v0.6.1 | ✅ Resuelto |
+| Regresión del encabezado sin acentos | v0.7.1 | ✅ Resuelto |
+| Duplicados y anclas imprecisas en `deep` | v0.7.2 | 🔄 En curso |
+| Un subagente cortado por límite de sesión de Anthropic | — | ✅ Se retomó sin repetir trabajo |
+| Subagente bloqueado dos veces por el clasificador de permisos | — | ✅ Se resolvió con la autorización explícita del usuario |
+
+---
+
+## 5. Lo que estos números **no** prueban
+
+1. **Muestras pequeñas.** Son 6 PRs y 7 escenarios, con una corrida por celda. Ningún porcentaje de arriba es una tasa estadística.
+2. **Los problemas están sembrados a propósito** y son bastante claros. Los bugs reales suelen ser más sutiles.
+3. **Un solo repo y un solo dominio** (una app de causas). No sabemos cómo se comporta con otros lenguajes o arquitecturas.
+4. **Un solo modelo** (GLM-5.3, razonamiento en nivel bajo). Con Claude o con otro modelo el resultado puede ser distinto.
+5. **Sin bugs reales.** Los 25 casos reales del set de evaluación (B11) los tenés que curar vos, y el corredor y el juez de la Fase 0 (B14 a B17) nunca se construyeron. La decisión formal de si el agente supera al modo simple con un modelo de producción no se tomó.
+6. **Los costos son estimaciones** desde los tokens reportados. GLM informa 0 tokens de razonamiento aunque razona, así que pueden estar subestimados. El dato verdadero está en el panel de Z.ai.
+7. **Los chequeos mecánicos** solo se midieron en local: el `rules.md` de producción todavía no tiene líneas `check:`.
+
+## 6. Conclusión
+
+Para reglas concretas y PRs chicos el producto funciona y no inventa problemas. Los fallos encontrados se detectaron midiendo y se corrigieron rápido, salvo los duplicados de `deep`, que están en curso. Lo que falta para decir "todo bien" con confianza es medir con **casos reales** y con **un modelo de producción**, y mirar el **costo real** en el panel de Z.ai.
