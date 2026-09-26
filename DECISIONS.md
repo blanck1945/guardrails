@@ -180,14 +180,107 @@ Cómo mantenerlo: cada decisión nueva se agrega al final con el siguiente núme
 ## Planificadas
 
 ### D-019 — `init` al instalar la App, refresh incremental y aprendizaje desde feedback (B37 a B39)
-- **Estado:** Planificada; requiere plan previo con `planner-hyper`
+- **Estado:** Reemplazada en parte por D-032, D-037, D-038 y D-039. Antes: requiere plan previo con `planner-hyper`
 - **Ideas acordadas:** `init` corre una sola vez por repo (es lento y caro). Después, un refresh incremental que solo procesa las fuentes que cambiaron (con un archivo de hashes) y propone reglas nuevas como `suggested`, sin tocar lo que el usuario escribió. Más adelante, reglas propuestas desde el historial de reviews (aceptados y rechazados).
 - **Decisiones abiertas:** dónde guardar el estado (archivo en el repo o base de datos); si `init` abre un PR (exige `contents: write`, ver D-008) o comenta las reglas propuestas en un issue; qué hacer con reglas obsoletas cuando se borra su fuente.
 
 ### D-020 — Eficiencia del consumo
-- **Estado:** Planificada; pedido del usuario ("el consumo de Z es grande")
+- **Estado:** Reemplazada en parte por D-033. Antes: pedido del usuario ("el consumo de Z es grande")
 - **Ideas:** modelo más barato por modo (`glm-5.3-flash` para `basic`), re-revisión incremental en cada push, menos contexto por llamada y prefijo de prompt ordenado para aprovechar la caché, saltar diffs triviales, tope de gasto diario y costo visible por review.
 - **Prerrequisito:** los números reales del panel de Z.ai, para calibrar cuánto se subestima el costo.
+
+### D-027 — Cobertura visible en cada revisión
+- **Fecha:** 2026-09-26 · **Estado:** Planificada (v0.8.0)
+- **Decisión:** cada revisión muestra una línea de cobertura (máximo 220 caracteres) y un bloque plegado con el detalle: archivos revisados, omitidos o demasiado grandes; reglas en alcance, verificadas por código o por el modelo; y por qué una revisión quedó incompleta. Lo que garantiza un chequeo y lo que solo afirma el modelo se rotulan por separado.
+- **Por qué:** el usuario preguntó si se puede ver el nivel de cobertura. Los datos ya existen dentro del sistema (por ejemplo `ruleChecks` de `deep`) y hoy no se muestran. La cobertura mide qué se miró, no si se miró bien.
+- **Decidido por:** el usuario (Q1: sí).
+
+### D-028 — El presupuesto de diff del modelo empaqueta archivos completos y declara los que no entran
+- **Fecha:** 2026-09-26 · **Estado:** Planificada (v0.8.0)
+- **Decisión:** en vez de cortar el diff a los 200.000 caracteres a mitad de un archivo, se incluyen archivos completos, se declaran los que no entran y los chequeos mecánicos corren sobre el diff completo.
+- **Por qué:** verificado en `review-pr.ts`: el modelo recibe el diff cortado sin aviso, mientras los chequeos ven el completo, y el aviso de "diff demasiado grande" nunca se dispara. Sin esto, cualquier afirmación de cobertura sería falsa.
+- **Decidido por:** el orquestador, a partir del plan.
+
+### D-029 — Registro de cada revisión: marcador oculto y firmado en el resumen del PR
+- **Fecha:** 2026-09-26 · **Estado:** Planificada (v0.9.0)
+- **Decisión:** cada revisión termina con un registro (solo metadatos) en un marcador oculto y firmado dentro del comentario resumen. El propio PR es el primer almacén, y el mismo registro sirve de estado para la revisión incremental. La firma usa `GUARDRAILS_RECORD_KEY` y `GITHUB_APP_SLUG=guardrails-boogiepop`, a cargar en Vercel y en `.env.local`.
+- **Por qué:** cero infraestructura y neutral respecto del proveedor; permite entregar valor antes de tener base de datos.
+- **Decidido por:** el usuario (Q6: sí).
+
+### D-030 — Solo se guardan metadatos: nunca código, diffs, títulos, cuerpos ni usuarios
+- **Fecha:** 2026-09-26 · **Estado:** Planificada (v0.9.0)
+- **Decisión:** el registro guarda rutas de archivos e identificadores de reglas, nunca contenido.
+- **Por qué:** privacidad (PLAN-DETAILED §8); el contenido se queda en GitHub.
+- **Decidido por:** el usuario (Q3: sí).
+
+### D-031 — Informe consolidado: primero un comando de línea, en Markdown y CSV, para el dueño del repo
+- **Fecha:** 2026-09-26 · **Estado:** Planificada (v0.9.0)
+- **Decisión:** `guardrails report` genera un Markdown y un CSV a partir de los registros y de las reacciones y hilos leídos en vivo. Es solo para el dueño del repo por ahora y puede usar su token de lectura de GitHub (`gh auth token`), solo lectura. Un panel con historial va después.
+- **Por qué:** valor antes de tener base de datos, hosting o permisos nuevos.
+- **Decidido por:** el usuario (Q4 y Q5: sí).
+
+### D-032 — Revisión incremental desde el último marcador de confianza
+- **Fecha:** 2026-09-26 · **Estado:** Planificada (v0.10.0)
+- **Decisión:** en cada push solo se revisa lo nuevo desde el último marcador confiable. Se hace revisión completa ante force-push, cambio de base, de reglas o de modo, y siempre en `deep`.
+- **Por qué:** ahorra consumo y resuelve la pregunta de dónde vive el estado incremental sin base de datos.
+- **Decidido por:** el orquestador, a partir del plan; el usuario no tenía preferencia y aceptó el valor por defecto.
+
+### D-033 — Orden de las mejoras de eficiencia; el gasto se mide con el saldo prepago
+- **Fecha:** 2026-09-26 · **Estado:** Planificada (v0.9.0 a v0.10.0)
+- **Decisión:** saltar el modelo en diffs triviales, `glm-5.3-flash` para `basic`, costo visible por defecto, revisión incremental, orden del prefijo del prompt, y el tope diario recién cuando exista base de datos. El gasto se calibra leyendo el saldo prepago de Z.ai antes y después de cada tanda de pruebas.
+- **Por qué:** mayor ahorro por esfuerzo primero; nuestro costo es una estimación (D-011).
+- **Pendiente:** el valor del tope diario (Q10) se define cuando se sepa cómo se cobra el producto.
+- **Decidido por:** el usuario aceptó leer el saldo (Q11).
+
+### D-034 — GitLab queda aplazado: por ahora solo GitHub
+- **Fecha:** 2026-09-26 · **Estado:** Aplazada
+- **Decisión (usuario):** de momento solo soporte para GitHub. El diseño por adaptadores del plan (webhook, discusiones y archivo de la API de GitLab, token con alcance `api` y rol Reporter) se conserva como referencia, sin fecha.
+- **Por qué:** el núcleo es independiente del proveedor (D-002), así que agregarlo después es un adaptador y no obliga a decidir ahora.
+- **Decidido por:** el usuario (Q7).
+
+### D-035 — `TarballWorkspace` recibe una función de descarga en vez de un cliente de Octokit
+- **Fecha:** 2026-09-26 · **Estado:** Planificada
+- **Decisión:** el espacio de trabajo del núcleo deja de depender de Octokit.
+- **Por qué:** corrige una fuga de GitHub dentro del núcleo (D-002). Deja de ser urgente con GitLab aplazado, pero sigue siendo higiene de diseño.
+- **Decidido por:** el orquestador.
+
+### D-036 — Base de datos diferida hasta que haya un disparador; candidato preferido: Turso
+- **Fecha:** 2026-09-26 · **Estado:** Planificada
+- **Decisión:** no se agrega base de datos hasta que ocurra un disparador: un segundo repo, el tope diario de gasto, aprender del feedback o un informe que tarde más de 60 segundos. Cuando llegue, el usuario prefiere **Turso** (SQLite en la nube, libSQL) frente a Neon con Postgres.
+- **Por qué:** nada de lo planificado hasta la v0.10.0 la necesita, y Turso es más liviana. Reemplaza en parte lo de `PLAN-DETAILED.md` §2, que asumía Neon con `pgvector`.
+- **A verificar al momento de usarla:** soporte de Drizzle con libSQL en las funciones de Vercel, y búsqueda vectorial de Turso si se retoma el filtro por embeddings del feedback.
+- **Decidido por:** el usuario (Q9: propuso Turso; queda como candidata).
+
+### D-037 — `init` corre en la primera revisión de un repo sin reglas y publica una propuesta plegada
+- **Fecha:** 2026-09-26 · **Estado:** Planificada
+- **Decisión:** no se ejecuta al instalar la App: en la primera revisión de un repo sin `rules.md`, se publica la propuesta de reglas como un bloque plegado en el resumen. Sin permisos nuevos.
+- **Por qué:** al instalar no hay dónde comentar sin el permiso `issues: write`. Reemplaza en parte a D-019.
+- **Decidido por:** el usuario aceptó "comentar, sin aumentar permisos".
+
+### D-038 — Las reglas se actualizan por hashes de sus fuentes, guardados en el preámbulo de `rules.md`
+- **Fecha:** 2026-09-26 · **Estado:** Planificada
+- **Decisión:** solo hay propuestas en los PRs que cambian las fuentes; las reglas obsoletas se marcan y nunca se borran.
+- **Por qué:** sin permiso de escritura, sin llamar al modelo si nada cambió y respetando D-005.
+- **Decidido por:** el orquestador, a partir del plan.
+
+### D-039 — Aprender del feedback con sugerencias a nivel de regla, nunca automáticas
+- **Fecha:** 2026-09-26 · **Estado:** Planificada (con la base de datos)
+- **Decisión:** una sugerencia aparece con umbrales explícitos (por ejemplo, al menos 3 rechazos en al menos 2 PRs y 90 días). El filtro por embeddings del feedback queda para más adelante.
+- **Por qué:** es explicable y seguro.
+- **Decidido por:** el orquestador, a partir del plan.
+
+### D-040 — Modelos: GLM-5.3 para pruebas; el techo para producción es de clase Sonnet
+- **Fecha:** 2026-09-26 · **Estado:** Vigente
+- **Decisión (usuario):** de momento se sigue con `glm-5.3`, solo para pruebas; para producción no usaría un modelo por encima de la clase Sonnet. `glm-5.3-flash` se acepta para el modo `basic` si encuentra los mismos problemas sembrados.
+- **Por qué:** costo. Con los precios verificados el 2026-09-24, Sonnet 5 cuesta $2 de entrada y $10 de salida por millón de tokens, contra $1.40 y $4.40 de `glm-5.3`: la diferencia es de 1,4 a 2,3 veces, no de un orden de magnitud.
+- **Consecuencia:** la decisión formal de si el agente supera al modo simple (riesgo R1) queda para cuando se pruebe con un modelo de clase Sonnet.
+- **Decidido por:** el usuario (Q12).
+
+### D-041 — Los hallazgos de baja confianza de `deep` van a una sección plegada, no como comentarios en línea
+- **Fecha:** 2026-09-26 · **Estado:** Planificada (v0.8.0)
+- **Decisión:** en `deep`, un hallazgo de confianza menor a 0.6 sin regla asociada se muestra en el bloque plegado de detalle y no como comentario en el código. El umbral de recolección de `deep` se mantiene en 0.4.
+- **Por qué:** los dos hallazgos extra del caso del CSV ("la exportación ignora los filtros activos", confianza 0.6, y "serializa el estado en inglés con encabezados en español", 0.4) son observaciones razonables pero no violan una regla ni son bugs claros. Como comentario en línea serían ruido; en un bloque plegado conservan el recall de `deep` sin ensuciar el PR.
+- **Decidido por:** el orquestador (el usuario delegó la decisión, Q2).
 
 ---
 
