@@ -52,6 +52,7 @@ export function mergeRuns(runs: readonly AgentRunResult[], diffFiles?: readonly 
     incomplete: runs.every((r) => r.incomplete),
     invalidReports: runs.reduce((n, r) => n + r.invalidReports, 0),
     forcedWrapUp: runs.some((r) => r.forcedWrapUp),
+    filesOpened: [...new Set(runs.flatMap((r) => r.filesOpened))].sort(),
     ...(ruleChecks ? { ruleChecks } : {}),
   };
 }

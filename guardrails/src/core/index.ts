@@ -10,3 +10,4 @@ export * from "./spend";
 export * from "./sampling";
 export * from "./modes";
 export * from "./summary";
+export * from "./coverage";

@@ -98,3 +98,21 @@ export function snapToQuotedLine<T extends Anchorable>(finding: T, files: readon
 export function snapAnchors<T extends Anchorable>(findings: readonly T[], files: readonly FileDiff[]): T[] {
   return findings.map((f) => snapToQuotedLine(f, files));
 }
+
+/**
+ * Does the added line `line` of `file` contain text quoted by any of the findings (evidence notes, title, body)?
+ * Used to break ties between anchor candidates that both lie inside an evidence range: a line that holds the
+ * quoted text beats a line that only lies inside a range the model may have got wrong. False for lines that are
+ * not added lines of the diff.
+ */
+export function lineMatchesQuotedSnippet(findings: readonly Anchorable[], files: readonly FileDiff[], file: string, line: number): boolean {
+  const fd = files.find((d) => d.path === file);
+  if (!fd) return false;
+  let text: string | undefined;
+  for (const h of fd.hunks) {
+    for (const l of h.lines) if (l.type === "add" && l.newLine === line) text = norm(l.content);
+  }
+  if (text === undefined) return false;
+  const line_ = text;
+  return findings.some((f) => candidateSnippets(f).some((s) => line_.includes(s)));
+}

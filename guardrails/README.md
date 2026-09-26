@@ -134,6 +134,15 @@ check-coverage: exhaustive
 Limits of `only`: regex literals are not recognised by the lexer, JSX text between tags counts as code, other file types are skipped. Without a workspace (the cloud single-mode fallback) `max-lines`, `colocated-test` and `only` are skipped and the model handles those rules.
 `guardrails init` proposes a `check:` when a rule allows it and drops an invalid one with a warning.
 
+## Coverage data (core)
+
+`reviewDiff` returns a `coverage` object (`computeCoverage`, `src/core/coverage.ts`) that says what the review actually examined, keeping what code guarantees ("check") apart from what the model claims ("model"). It is data only: nothing is published from it yet (the summary line and details block come with the cloud and CLI wiring).
+
+- **Files**: each changed file has one status: `removed`, `ignored`, `no-diff`, `over-budget`, `checks-only` (its patch was in the model input but the model part did not complete) or `reviewed` (its diff was in the model input and the model finished; not "every line was analysed"), plus an `opened` flag (the agent read it at head).
+- **Rules**: each rule in scope is `check`, `check+model`, `check-failed+model` or `model`, with the result of the check part (`k violations` / `none found`) and of the model part (`reported`, `violated, not published`, `ok`, `not applicable`, `not asked`, `no verdict`, `not run`).
+- **Complete or not**: `complete` is true when none of the stable reason codes applies (`model-timeout`, `model-budget`, `model-error`, `no-valid-report`, `pass-failed`, `step-budget`, `missing-verdicts`, `diff-over-budget`, `single-fallback`, `checks-skipped`).
+- Callers that know more (removed, ignored or patch-less files, the single-mode fallback) pass it in `ReviewOptions.coverage`. The object holds only paths, rule ids, counters and status words, never code.
+
 ## Environment variables
 
 Loaded from the process environment or from `guardrails/.env.local` (never committed). See `.env.example`.

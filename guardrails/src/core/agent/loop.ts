@@ -50,6 +50,8 @@ export interface AgentRunResult {
   forcedWrapUp: boolean;
   /** Verdicts from the exhaustive per-rule pass, when the model gave them. */
   ruleChecks?: RuleCheck[] | undefined;
+  /** Distinct paths the agent read at the head revision (`read_file`, ref `head` or omitted, no error), sorted. */
+  filesOpened: string[];
 }
 
 type AnyStep = StepResult<ToolSet, any>;
@@ -59,6 +61,26 @@ function invalidReportCalls(steps: readonly AnyStep[]): { toolName: string; inpu
     .flatMap((s) => s.content)
     .filter((p) => p.type === "tool-error" && p.toolName === REPORT_TOOL)
     .map((p) => ({ toolName: REPORT_TOOL, input: (p as { input?: unknown }).input }));
+}
+
+/** Paths successfully read at the head revision through `read_file`, deduplicated and sorted. */
+export function headFilesOpened(steps: readonly AnyStep[]): string[] {
+  const opened = new Set<string>();
+  for (const step of steps) {
+    const calls = new Map<string, { path?: unknown; ref?: unknown }>();
+    for (const p of step.content) {
+      if (p.type === "tool-call" && p.toolName === "read_file") calls.set(p.toolCallId, (p.input ?? {}) as { path?: unknown; ref?: unknown });
+    }
+    for (const p of step.content) {
+      if (p.type !== "tool-result" || p.toolName !== "read_file") continue;
+      const out = (p as { output?: unknown }).output;
+      if (out && typeof out === "object" && "error" in out) continue;
+      const input = calls.get(p.toolCallId);
+      if (!input || typeof input.path !== "string" || (input.ref !== undefined && input.ref !== "head")) continue;
+      opened.add(input.path.replaceAll(String.fromCharCode(92), "/").replace(/^\.\//, ""));
+    }
+  }
+  return [...opened].sort();
 }
 
 /** Salvage the valid items of a malformed report (PLAN-DETAILED §3.9). */
@@ -148,6 +170,7 @@ export async function runReviewAgent(opts: AgentRunOptions): Promise<AgentRunRes
 
   const usage = sumUsage(result.steps.map((s) => s.usage));
   const invalid = invalidReportCalls(result.steps);
+  const filesOpened = headFilesOpened(result.steps);
 
   // A bounced report is better than nothing when the run ended before a second one.
   const finalReport = (report ?? bouncedReport) as Report | undefined;
@@ -163,6 +186,7 @@ export async function runReviewAgent(opts: AgentRunOptions): Promise<AgentRunRes
       incomplete: false,
       invalidReports: invalid.length,
       forcedWrapUp,
+      filesOpened,
     };
   }
 
@@ -174,5 +198,6 @@ export async function runReviewAgent(opts: AgentRunOptions): Promise<AgentRunRes
     incomplete: true,
     invalidReports: invalid.length,
     forcedWrapUp,
+    filesOpened,
   };
 }

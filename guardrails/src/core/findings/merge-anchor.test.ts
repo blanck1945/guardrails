@@ -316,3 +316,45 @@ describe("mergeAcrossPasses validated Also at (v0.7.4)", () => {
     expect(findings[0]!.body.length).toBeLessThanOrEqual(1500);
   });
 });
+
+describe("mergeAcrossPasses tie-break by quoted snippet (v0.7.5)", () => {
+  // shape of v0.7.4 run 2: file lines 9 to 12; line 10 is `return (`, line 12 is the heading
+  const PAGE = "src/components/ReminderList.tsx";
+  const pageRows = ["const a = 1;", "return (", "  <div>", "  <h2>Recordatorios</h2>"];
+  const pageDiff = [`--- a/${PAGE}`, `+++ b/${PAGE}`, "@@ -0,0 +9,4 @@", ...pageRows.map((r) => `+${r}`), ""].join("\n");
+  const pageFiles = parseUnifiedDiff(pageDiff);
+  const pf = (over: Partial<FindingV2>): FindingV2 => ({
+    file: PAGE,
+    line: 12,
+    type: "style",
+    severity: "low",
+    confidence: 0.7,
+    title: "Spanish heading in UI code",
+    body: "The heading is fine for the UI but the rule asks for English code.",
+    ruleId: "english-code-spanish-ui",
+    evidence: [ev(12, 12, "the heading `<h2>Recordatorios</h2>`", PAGE)],
+    ...over,
+  });
+  const wrong = pf({ line: 10, severity: "medium", confidence: 0.9, evidence: [ev(9, 11, "component root", PAGE)] });
+  const right = pf({ line: 12 });
+
+  it("anchors on the line that matches a quoted snippet, whatever the pass order", () => {
+    for (const passes of [[[wrong], [right]], [[right], [wrong]]]) {
+      const { findings, merged } = mergeAcrossPasses(passes, { diffFiles: pageFiles });
+      expect(merged).toBe(1);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]!.line).toBe(12);
+      expect(findings[0]!.body).not.toMatch(/Also at lines? (\d+, )*12\b/);
+    }
+  });
+
+  it("without diff information the old choice (severity) stays", () => {
+    expect(mergeAcrossPasses([[wrong], [right]]).findings[0]!.line).toBe(10);
+  });
+
+  it("a snippet match outside every range does not beat a candidate inside a range", () => {
+    const off = pf({ line: 12, evidence: [ev(9, 9, "x", PAGE)] });
+    const inside = pf({ line: 10, severity: "medium", evidence: [ev(9, 11, "component root", PAGE)] });
+    expect(mergeAcrossPasses([[off], [inside]], { diffFiles: pageFiles }).findings[0]!.line).toBe(10);
+  });
+});

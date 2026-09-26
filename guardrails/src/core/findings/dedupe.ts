@@ -1,5 +1,6 @@
 import type { FindingV2 } from "./schema";
 import type { FileDiff } from "../diff";
+import { lineMatchesQuotedSnippet } from "./anchor";
 import { normalizeTitle } from "./fingerprint";
 
 const SEVERITY_RANK = { low: 0, medium: 1, high: 2 } as const;
@@ -144,7 +145,13 @@ export function mergeAcrossPasses<T extends FindingV2>(
       const inRange = (x: T): boolean => ranges.some((e) => e.file === x.file && x.line >= Math.min(e.startLine, e.endLine) && x.line <= Math.max(e.startLine, e.endLine));
       const fIn = inRange(f);
       const bIn = inRange(best.f);
-      const wins = fIn !== bIn ? fIn : better(f, best.f) && !better(best.f, f);
+      // v0.7.5: when both candidates lie inside a range, the one on a line that holds text quoted by the
+      // findings beats one that only lies inside a range the model may have got wrong (needs the diff). It
+      // overrides severity and confidence; an exact tie of both keeps the earlier candidate as before.
+      const tied = better(f, best.f) && better(best.f, f);
+      const fQuote = !!diffFiles && !tied && fIn && bIn && lineMatchesQuotedSnippet([f, best.f], diffFiles, f.file, f.line);
+      const bQuote = !!diffFiles && !tied && fIn && bIn && lineMatchesQuotedSnippet([f, best.f], diffFiles, best.f.file, best.f.line);
+      const wins = fQuote !== bQuote ? fQuote : fIn !== bIn ? fIn : better(f, best.f) && !better(best.f, f);
       const keep = wins ? f : best.f;
       const other = wins ? best.f : f;
       const ruleId = keep.ruleId ?? other.ruleId;

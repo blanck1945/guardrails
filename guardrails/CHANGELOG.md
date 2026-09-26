@@ -3,6 +3,24 @@
 Each version has three parts: what we did, what we observed when we measured it, and what that made us do next.
 The "Next" of a version is the "What we did" of the following one. Newest first. See `CLAUDE.md` for the convention.
 
+## v0.7.5 — 2026-09-26
+### What we did
+Part 1 of v0.8.0 (the user-visible v0.8.0 is published after part 2 wires it). Core only: no change in what is published, no new findings, no cloud or CLI wiring.
+- `src/core/coverage.ts`: `computeCoverage` builds the coverage object from the data of a review: six file statuses (`removed`, `ignored`, `no-diff`, `over-budget`, `checks-only`, `reviewed`) plus an `opened` flag, per-rule coverage (`check`, `check+model`, `check-failed+model`, `model`; result of the check part and of the model part; whether it counts as covered), the fixed list of ten reasons for an incomplete run, dropped findings by reason and `verdictConflicts`. It holds only paths, rule ids, counters and words. Callers pass what only they know (all changed files with their state, rules out of scope, single-mode fallback) in `ReviewOptions.coverage`.
+- Plumbing: `ReviewOutput` now has `coverage`, `checks.exhaustive`, `checks.partial`, `forcedWrapUp` (agent mode; it was dropped before) and `filesOpened`. The agent loop collects the paths it read at head (`read_file`, ref head or omitted, without an error) and `mergeRuns` unions them across the two `deep` passes; single mode reports its full-file contexts as opened.
+- Anchor tie-break (from the v0.7.4 observation): when the two passes of `deep` give anchors that both lie inside an evidence range, the one on a line that holds text quoted by the findings (evidence notes, title, body) beats the one that only lies inside a range the model may have got wrong, over severity and confidence. An exact tie of severity and confidence still keeps the earlier candidate. A quote match outside every range never beats a candidate inside a range (that is the v0.7.3 failure). The exact v0.7.4 run 2 shape (line 10 `return (` against the heading on line 12) now anchors on line 12.
+- Tests (mock models only): every file status and precedence, every `how`, every model-result branch (with and without a dropped finding, verdict without file, `basic` and single mode), every reason code and their order, determinism, `deep` with two passes and one failed, `forcedWrapUp` propagation, `filesOpened` (head only, no failed reads, deduplicated, union), the anchor tie-break in both pass orders.
+
+### What we observed
+Verification pending: part 2 wires the coverage into the cloud and the CLI and measures it on real runs. Nothing changed in published findings; all existing tests pass without edits to their assertions.
+
+### Next (v0.8.0)
+- Cloud: keep the state of every changed file (removed, ignored, no patch) and pass it in `ReviewOptions.coverage`; pack whole files into the diff budget instead of cutting the diff (D-028) and run the checks over the full diff.
+- Render the visible coverage line and the collapsed details block in the summary (`coverage: details | line | off` in the config), and the same in the CLI (human and JSON).
+- Log the coverage numbers in `review.analyzed`.
+- Low-confidence `deep` findings in a collapsed block instead of dropping them (D-041).
+- Real verification of part 1 and 2 together, including the accuracy of the model verdicts against the answer key.
+
 ## v0.7.4 — 2026-09-26
 ### What we did
 - Validated "Also at". When the two `deep` passes are merged, an extra location is listed only if its line lies inside an evidence range of that finding's file (from either pass) and, when the diff is known, is an added line of that file. Otherwise it is omitted; the finding itself is never dropped and the primary anchor rule of v0.7.3 is unchanged. With no surviving location there is no "Also at" text. The cap of 6 extra locations ("and K more") and the 1500-character limit are kept. Two older fixtures without evidence ranges were given ranges.

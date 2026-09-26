@@ -15,6 +15,7 @@ import type { GuardrailsConfig } from "./config";
 import { capFindings, capFor, collapseByLocation } from "./findings/limits";
 import { verifyAbsenceClaims } from "./findings/verify";
 import { snapAnchors } from "./findings/anchor";
+import { computeCoverage, type Coverage, type CoverageContext, type DropReason } from "./coverage";
 import { ruleType } from "./rules/merge";
 import { stripUnknownRuleIds } from "./rules/select";
 import { buildSystemPrompt, buildUserPrompt } from "./prompt";
@@ -51,6 +52,8 @@ export interface ReviewOptions {
   ruleChecks?: RuleChecksMode;
   /** Review mode (basic | standard | deep): steps, confidence threshold, cap, passes, temperature. Default: the `standard` preset. */
   reviewMode?: { preset: ModePreset; selection?: ModeSelection };
+  /** Extra facts for the coverage report that only the caller knows (all changed files, fallback). Never changes findings. */
+  coverage?: CoverageContext;
 }
 
 export interface ReviewOutput {
@@ -65,9 +68,15 @@ export interface ReviewOutput {
   incomplete?: boolean;
   notes?: string | undefined;
   /** Findings the model reported but that were filtered out, with the reason. */
-  dropped: { finding: Finding; reason: "low-confidence" | "comment-type-disabled" | "contradicted-by-repo" | "duplicate" | "over-cap" }[];
-  /** Mechanical rule checks (no model): which rules were verified and what could not run. */
-  checks: { ran: string[]; skipped: CheckSkip[]; findings: number };
+  dropped: { finding: Finding; reason: DropReason }[];
+  /** Mechanical rule checks (no model): which rules were verified (`exhaustive`, `partial`) and what could not run. */
+  checks: { ran: string[]; skipped: CheckSkip[]; findings: number; exhaustive: string[]; partial: string[] };
+  /** Agent mode: the forced wrap-up step was triggered in at least one pass. */
+  forcedWrapUp?: boolean;
+  /** Distinct paths the agent read at the head revision (single mode: the full-file contexts given to the model). */
+  filesOpened?: string[];
+  /** What was actually examined (see `computeCoverage`). */
+  coverage: Coverage;
   /** Set when the model part failed or ran out of budget/time; `findings` then holds only the check findings. */
   modelIncomplete?: "budget" | "timeout" | "error";
   /** Verdicts of the exhaustive per-rule pass (agent mode), when the model returned them. */
@@ -109,6 +118,7 @@ export async function reviewDiff(
     temperature: temperatureOption,
     ruleChecks: ruleChecksOption,
     reviewMode,
+    coverage: coverageContext,
   }: ReviewOptions,
 ): Promise<ReviewOutput> {
   const before = costTracker?.snapshot();
@@ -200,7 +210,7 @@ export async function reviewDiff(
   const withOmitted = (summary: string, omitted: number) =>
     omitted ? `${summary}${summary ? " " : ""}(${omitted} lower-priority finding(s) omitted: over the review cap.)` : summary;
 
-  const checksMeta = { ran: checkOutcome.ran, skipped: checkOutcome.skipped, findings: checkFindings.length };
+  const checksMeta = { ran: checkOutcome.ran, skipped: checkOutcome.skipped, findings: checkFindings.length, exhaustive: checkOutcome.exhaustive, partial: checkOutcome.partial.map((p) => p.ruleId) };
   const withChecks = (summary: string, failure?: "budget" | "timeout" | "error", passesFailed = 0) => {
     const extra = [
       selection ? describeMode(selection) : "",
@@ -243,7 +253,7 @@ export async function reviewDiff(
         run = union;
       } else run = await runOne();
       const v = await verify(run.findings);
-      return { ...v, summary: run.notes ?? "", usage: run.usage, incomplete: run.incomplete, notes: run.notes, ruleChecks: run.ruleChecks, passesFailed, passes: preset.passes, merged };
+      return { ...v, summary: run.notes ?? "", usage: run.usage, incomplete: run.incomplete, notes: run.notes, ruleChecks: run.ruleChecks, passesFailed, passes: preset.passes, merged, forcedWrapUp: run.forcedWrapUp, filesOpened: run.filesOpened };
     }
     const result = await generateText({
       model: resolveModel(model, { tracker: costTracker }),
@@ -257,7 +267,7 @@ ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
     });
     const usage = result.steps.length ? sumUsage(result.steps.map((s) => s.usage)) : emptyUsage();
     const v = await verify(snap(result.output.findings));
-    return { ...v, summary: result.output.summary, usage, incomplete: undefined, notes: undefined, ruleChecks: undefined, passesFailed: 0, passes: 1, merged: 0 };
+    return { ...v, summary: result.output.summary, usage, incomplete: undefined, notes: undefined, ruleChecks: undefined, passesFailed: 0, passes: 1, merged: 0, forcedWrapUp: false, filesOpened: Object.keys(input.context).sort() };
   };
 
   let part: Awaited<ReturnType<typeof modelPart>>;
@@ -268,8 +278,29 @@ ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
     // Without any check finding there is nothing to publish: the caller reports the failure as before.
     if (!checkFindings.length) throw err;
     failure = classifyModelFailure(err, abortSignal);
-    part = { findings: [], dropped: [], omitted: 0, summary: "", usage: emptyUsage(), incomplete: true, notes: undefined, ruleChecks: undefined, passesFailed: 0, passes: 1, merged: 0 };
+    part = { findings: [], dropped: [], omitted: 0, summary: "", usage: emptyUsage(), incomplete: true, notes: undefined, ruleChecks: undefined, passesFailed: 0, passes: 1, merged: 0, forcedWrapUp: false, filesOpened: [] };
   }
+  const modelIncomplete = failure;
+  const coverage = computeCoverage({
+    files: coverageContext?.files ?? diffFiles.map((d) => ({ path: d.path, state: "in-input" as const })),
+    rules: config.rules,
+    ...(coverageContext?.rulesOutOfScope ? { rulesOutOfScopeExtra: coverageContext.rulesOutOfScope } : {}),
+    engine: mode,
+    ruleChecksMode: ruleChecks,
+    checks: { ran: checkOutcome.ran, exhaustive: checkOutcome.exhaustive, partial: checksMeta.partial, skipped: checkOutcome.skipped },
+    ruleChecks: part.ruleChecks,
+    findings: [...checkFindings, ...part.findings],
+    dropped: part.dropped,
+    modelIncomplete,
+    incomplete: part.incomplete,
+    passes: part.passes,
+    passesFailed: part.passesFailed,
+    forcedWrapUp: part.forcedWrapUp,
+    notes: part.notes,
+    filesOpened: part.filesOpened,
+    steps: part.usage.steps,
+    fallback: coverageContext?.fallback,
+  });
   return {
     summary: withChecks(withOmitted(part.summary, part.omitted), failure, part.passesFailed),
     findings: [...checkFindings, ...part.findings],
@@ -287,6 +318,9 @@ ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
     merged: part.merged,
     omitted: part.omitted,
     modelSummary: part.summary,
+    coverage,
+    ...(mode === "agent" ? { forcedWrapUp: part.forcedWrapUp } : {}),
+    filesOpened: part.filesOpened,
     ...(failure ? { modelIncomplete: failure } : {}),
   };
 }
