@@ -11,8 +11,19 @@ The "Next" of a version is the "What we did" of the following one. Newest first.
 - Tests (mock models and temporary git repos only): the exact v0.7.3 run 2 shape (line 10 omitted, line 12 kept), an extra line inside a range that is not an added line, no surviving location, the cap of 6; head reads with another branch checked out and an uncommitted edit, committed symlink, invalid head revision, working-tree mode; monotonic estimate, `deep` above `standard`, a 3-file 120-line diff within 3 times of the measured costs, and the CLI dry-run using it.
 
 ### What we observed
-Verification pending; script provided (`run-v074-verify.sh`: `deep` twice on `v73/case-reminders` and `standard` once on `v73/csv-export`, with the clone kept on `base71` and the head passed explicitly, printing the dry-run estimate next to the real cost). Expected: 3 comments for 3 problems, every "Also at" line the same problem or absent, check findings identical to v0.7.3, and an estimate within 3 times of the real cost in every run.
+Real verification, local CLI, `zai:glm-5.3`, temperature 0, `--budget-usd 0.10` per run, on the temporary clone of `causas-viewer` (base branch `base71`; push disabled). **The clone stayed on `base71` during all runs: the head branches (`v73/*`) were passed with `--head` and never checked out**, which is the direct test of the head-revision reads. Three runs.
 
+| Run | Findings (file:line, origin) | Dry-run estimate | Real cost | Ratio | Time |
+|---|---|---|---|---|---|
+| case-reminders deep 1 | useReminders.ts:20 (check); useReminders.ts:21 (model); ReminderList.tsx:12 (model) | 0.0554 | 0.0346 | 1.60 | 29 s |
+| case-reminders deep 2 | useReminders.ts:20 (check); useReminders.ts:21 (model); ReminderList.tsx:10 (model, "Also at line 12") | 0.0554 | 0.0299 | 1.85 | 33 s |
+| csv-export standard | CaseExportButton.tsx:1 layered-data-access (check); csv.ts:1 colocated-tests (check) | 0.0151 | 0.0097 | 1.56 | 22 s |
+
+- **Head reads work without a checkout:** all three runs gave the expected findings while the clone was on `base71`, including `csv.ts` without a colocated test, which needs the head file list.
+- **The dry-run estimate is now within 1.6 to 1.9 times of the real cost** (it was about 10 times too high in v0.7.1 to v0.7.3), always above the real cost. Total real spend of this verification: US$0.074.
+- **"Also at" validation held:** the only extra location listed (line 12 in run 2) is the actual heading. No misleading extra locations. Three comments for three problems in both `deep` runs; the two check findings of csv-export are at the expected places.
+- **One anchor was off by two lines.** In run 2 the heading finding was anchored on line 10 (`return (`), and the real heading is on line 12 (it appears in "Also at"). The model gave two evidence ranges for that finding: a wrong one (lines 9 to 11) and a right one (line 12). Both passes' anchors lay inside some range, so the merge kept the one from the pass with the higher severity and confidence. Anchors in this verification: 5 of 6 as expected in the two deep runs on case-reminders (the miss is this one) and 2 of 2 in csv-export.
+- Cost of `deep` on case-reminders was US$0.030 to 0.035 this time against 0.022 to 0.025 in v0.7.3; three or five runs each, so no trend is claimed.
 ### Next (v0.8.0)
 - Coverage in the summary: which files and rules the review actually looked at.
 - Diff budget by whole files instead of truncating the diff.

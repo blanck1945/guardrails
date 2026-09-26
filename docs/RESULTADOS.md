@@ -2,7 +2,7 @@
 
 Qué salió bien y qué salió mal en **todas** las mediciones hechas hasta la v0.7.1, en un solo lugar. Es un resumen: el detalle de cada versión está en `guardrails/CHANGELOG.md` (sección *What we observed*), y el porqué de cada decisión en `DECISIONS.md`.
 
-Actualizado: 2026-09-26 (producción en la v0.7.3).
+Actualizado: 2026-09-26 (producción en la v0.7.3; v0.7.4 verificada en local, pendiente de subir).
 
 ---
 
@@ -14,7 +14,7 @@ Actualizado: 2026-09-26 (producción en la v0.7.3).
 | Detectar un bug de lógica sin regla | ✅ Bien, pero con **un solo caso** | El comparador que ordena mal las causas sin plazo: 4 de 4 corridas lo encontraron |
 | No inventar problemas en PRs limpios | ✅ Bien | 0 hallazgos en 9 corridas sobre PRs limpios |
 | Ruido en PRs con problemas | ✅ Mejoró | Un falso positivo real (corregido) y los **duplicados de `deep` resueltos en la v0.7.2** (3 comentarios para 3 problemas, antes 6). Sin juzgar: hallazgos extra de baja confianza de `deep` en corridas anteriores |
-| Precisión de la línea del comentario | ✅ Bien | 9 de 9 anclas correctas en la v0.7.3 (en la v0.7.2 eran 5 de 6). Queda validar las ubicaciones extra que se listan al unir duplicados |
+| Precisión de la línea del comentario | ✅ Bien, con un caso a dos líneas | 9 de 9 anclas en la v0.7.3; en la v0.7.4, 5 de 6 en `deep` (una quedó dos líneas arriba porque el modelo dio un rango equivocado) y 2 de 2 en CSV |
 | Repetibilidad (mismo resultado dos veces) | ⚠️ Parcial | Los chequeos mecánicos son idénticos entre corridas; los hallazgos del modelo cambian de línea, severidad y confianza |
 | Costo | ✅ Bajo, con dudas | Unos $0.004 a $0.018 por review estándar, $0.03 a $0.05 en `deep`. **Son estimaciones**, no lo que factura Z.ai |
 | Velocidad | ✅ Aceptable | 13 a 63 s por review; 50 s de la etiqueta a la revisión en producción |
@@ -102,6 +102,18 @@ Total: **6 de 7 ubicaciones sembradas, 0 falsos positivos, 0 hallazgos extra.** 
 
 - ✅ Es la primera vez que los chequeos corren en producción. Las líneas fueron las correctas (1, 1 y 3), sin duplicados, y el resumen indicó el origen ("2 from checks, 1 from the model").
 - ⚠️ **Mi expectativa era incorrecta:** esperaba que el chequeo de acentos marcara el comentario, pero el texto que puse no tenía ningún acento. Lo detectó el modelo. Es justo el caso para el que se diseñó la cobertura parcial (v0.7.1): el chequeo no ve el español sin acentos y el modelo sí.
+
+### M10 — Verificación de la v0.7.4 (local, 3 corridas, $0.074)
+| Corrida | Resultado | Estimado / real |
+|---|---|---|
+| Recordatorios `deep` 1 | 3 comentarios para 3 problemas, anclas correctas | 0.055 / 0.035 (1,6×) |
+| Recordatorios `deep` 2 | 3 comentarios para 3 problemas; el encabezado anclado 2 líneas arriba (línea 10 en vez de la 12), con la 12 en "Also at" | 0.055 / 0.030 (1,9×) |
+| Exportar CSV `standard` | Los 2 problemas por chequeo, en su lugar | 0.015 / 0.010 (1,6×) |
+
+- ✅ **Lectura del commit correcto:** el clon estuvo siempre en la rama base y las revisiones dieron lo esperado, sin abrir la rama revisada.
+- ✅ **La estimación previa ahora queda entre 1,6 y 1,9 veces del costo real** (antes era unas 10 veces).
+- ✅ **"Also at" no mostró ubicaciones engañosas.**
+- ⚠️ **Una ancla dos líneas arriba:** el modelo dio un rango de evidencia equivocado (9 a 11) y otro correcto (12), y al unir las pasadas ganó el de la pasada con mayor severidad. Anotado para la v0.8.0.
 
 ### M6 — `guardrails init` (derivar reglas de un repo)
 | Repo | Reglas propuestas | Descartadas por ya estar cubiertas | Tiempo | Costo |
