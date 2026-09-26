@@ -27,6 +27,11 @@ Real verification, local CLI, `zai:glm-5.3`, temperature 0, `--mode deep`, `--bu
 - **Clean branch:** no findings.
 - Cost of `deep`: US$0.022 to 0.025 per review on case-reminders, US$0.034 on the clean branch and US$0.040 on csv-export; total US$0.144 for the five runs. Lower than the v0.7.2 runs on the same PR (0.029 to 0.043); three runs each, so no trend is claimed.
 - The merged heading finding in run 2 lists "Also at line 10", a location that is not the heading. The merged extra locations come from the second pass and are not validated against the evidence; the primary anchors are.
+**Production smoke test of the mechanical checks (deployed v0.7.3, 2026-09-26).** PR #8 of `causas-viewer` added `check:` lines to four rules (accent pattern, colocated test, forbidden repository import, 150 lines) and was merged after the App reviewed it ("No issues found", with the note that the base-branch rules were used). PR #9 then added `src/components/RepositoryBadge.tsx` that imports `data/repository`, has no test and a Spanish comment.
+- The App posted 3 comments in 36 s (PR opened 16:23:51 UTC, review 16:24:27 UTC), CI green. Summary: "3 findings: 2 from checks, 1 from the model".
+- From the checks: `layered-data-access` at line 1 (forbidden import) and `colocated-tests` at line 1 (no `RepositoryBadge.test.*`). From the model: the Spanish comment at line 3. The model did not repeat the two findings the checks had already reported.
+- **The Spanish comment came from the model, not from the accent check, because the test comment had no accented characters** ("Muestra la cantidad de causas cargadas."). My expectation that the accent check would fire was wrong; the case shows the partial-coverage design of v0.7.1 working: the check cannot see unaccented Spanish and the model still catches it.
+- Anchors on the right lines (1, 1 and 3); no duplicates. The rule change itself (PR #8) was not flagged.
 ### Next (v0.7.4)
 - Validate the extra locations listed in "Also at" against the evidence ranges (the heading finding of run 2 listed line 10, which is not the heading).
 - Read cost and duration of production reviews from the Vercel logs and record them per mode.

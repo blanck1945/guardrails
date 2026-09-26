@@ -2,7 +2,7 @@
 
 Qué salió bien y qué salió mal en **todas** las mediciones hechas hasta la v0.7.1, en un solo lugar. Es un resumen: el detalle de cada versión está en `guardrails/CHANGELOG.md` (sección *What we observed*), y el porqué de cada decisión en `DECISIONS.md`.
 
-Actualizado: 2026-09-25 (producción en la v0.7.2; v0.7.3 verificada en local, pendiente de subir).
+Actualizado: 2026-09-26 (producción en la v0.7.3).
 
 ---
 
@@ -94,6 +94,15 @@ Total: **6 de 7 ubicaciones sembradas, 0 falsos positivos, 0 hallazgos extra.** 
 - ⚠️ En una corrida, el texto "Also at line 10" del encabezado apunta a una línea que no es el encabezado: las ubicaciones extra no se validan.
 - ⚠️ `deep` sigue agregando hallazgos extra de baja confianza (2 en CSV) que no estaban sembrados. No se sabe si son ruido o algo útil.
 
+### M9 — Chequeos mecánicos en producción (v0.7.3, 2026-09-26)
+| Paso | Resultado |
+|---|---|
+| PR #8: agrega las líneas `check:` a 4 reglas | ✅ Sin hallazgos; la App avisó que usó las reglas de la rama base |
+| PR #9: un componente que importa el repositorio, sin test y con un comentario en español | ✅ 3 comentarios en 36 s: 2 por chequeo (import prohibido y test faltante), 1 por el modelo (el comentario) |
+
+- ✅ Es la primera vez que los chequeos corren en producción. Las líneas fueron las correctas (1, 1 y 3), sin duplicados, y el resumen indicó el origen ("2 from checks, 1 from the model").
+- ⚠️ **Mi expectativa era incorrecta:** esperaba que el chequeo de acentos marcara el comentario, pero el texto que puse no tenía ningún acento. Lo detectó el modelo. Es justo el caso para el que se diseñó la cobertura parcial (v0.7.1): el chequeo no ve el español sin acentos y el modelo sí.
+
 ### M6 — `guardrails init` (derivar reglas de un repo)
 | Repo | Reglas propuestas | Descartadas por ya estar cubiertas | Tiempo | Costo |
 |---|---|---|---|---|
@@ -150,7 +159,7 @@ Se pierden unas 12 reglas de menor prioridad por el tope de 15. Los scopes que s
 4. **Un solo modelo** (GLM-5.3, razonamiento en nivel bajo). Con Claude o con otro modelo el resultado puede ser distinto.
 5. **Sin bugs reales.** Los 25 casos reales del set de evaluación (B11) los tenés que curar vos, y el corredor y el juez de la Fase 0 (B14 a B17) nunca se construyeron. La decisión formal de si el agente supera al modo simple con un modelo de producción no se tomó.
 6. **Los costos son estimaciones** desde los tokens reportados. GLM informa 0 tokens de razonamiento aunque razona, así que pueden estar subestimados. El dato verdadero está en el panel de Z.ai.
-7. **Los chequeos mecánicos** solo se midieron en local: el `rules.md` de producción todavía no tiene líneas `check:`.
+7. **Los chequeos mecánicos** se probaron en producción una sola vez (M9), con un componente sembrado de tres violaciones. Falta ver falsos positivos con PRs reales de más variedad.
 
 ## 6. Conclusión
 
