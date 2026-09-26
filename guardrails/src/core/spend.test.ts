@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { estimateRun, planSpend, PROFILES } from "./spend";
+import { estimateRun, planSpend, profileFromDiff, PROFILES } from "./spend";
 
 describe("estimateRun", () => {
   it("multiplies runs by the assumed profile and prices it", () => {
@@ -75,5 +75,44 @@ describe("guardrails init CLI", () => {
     const r = run(["--model", "acme/unknown"], {});
     expect(r.status).toBe(2);
     expect(r.stderr).toMatch(/Refusing to run non-interactively/);
+  });
+});
+
+describe("profileFromDiff (v0.7.4)", () => {
+  // 3 files, 120 changed lines of about 50 chars each, plus headers
+  const chars = 120 * 50 + 3 * 200;
+  const glm = "zai:glm-5.3"; // the model of the measured runs
+  const usd = (mode: "standard" | "deep", c = chars, files = 3) => estimateRun(glm, mode === "deep" ? 2 : 1, profileFromDiff(c, files, mode)).usd!;
+
+  it("grows with the diff size and the file count", () => {
+    const sizes = [1_000, 5_000, 20_000, 80_000].map((c) => profileFromDiff(c, 3, "standard").inputTokens);
+    expect(sizes).toEqual([...sizes].sort((a, b) => a - b));
+    expect(new Set(sizes).size).toBe(sizes.length);
+    expect(profileFromDiff(chars, 8, "standard").outputTokens).toBeGreaterThan(profileFromDiff(chars, 2, "standard").outputTokens);
+    expect(usd("standard", 80_000)).toBeGreaterThan(usd("standard", 1_000));
+  });
+
+  it("deep costs more than standard, standard more than single", () => {
+    expect(usd("deep")).toBeGreaterThan(usd("standard"));
+    const single = estimateRun(glm, 1, profileFromDiff(chars, 3, "single")).usd!;
+    expect(usd("standard")).toBeGreaterThan(single);
+  });
+
+  it("3 files / 120 lines lies within 3x of the measured costs", () => {
+    // measured: standard US$0.004 to 0.018, deep US$0.022 to 0.043
+    expect(usd("standard")).toBeGreaterThanOrEqual(0.004 / 3);
+    expect(usd("standard")).toBeLessThanOrEqual(0.018 * 3);
+    expect(usd("deep")).toBeGreaterThanOrEqual(0.022 / 3);
+    expect(usd("deep")).toBeLessThanOrEqual(0.043 * 3);
+  });
+
+  it("is far below the fixed agent profile for a small PR", () => {
+    expect(profileFromDiff(chars, 3, "standard").inputTokens).toBeLessThan(PROFILES.agent.inputTokens / 10);
+  });
+
+  it("tolerates an empty diff", () => {
+    const p = profileFromDiff(0, 0, "deep");
+    expect(p.inputTokens).toBe(3_000);
+    expect(p.outputTokens).toBe(500);
   });
 });

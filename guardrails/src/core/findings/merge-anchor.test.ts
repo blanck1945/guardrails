@@ -257,7 +257,7 @@ describe("mergeAcrossPasses anchors and body cap (v0.7.3)", () => {
   });
 
   it("30 extra locations become 6 plus 'and 24 more'", () => {
-    const passes = Array.from({ length: 31 }, (_, i) => [hf({ line: 200 + i, evidence: [] })]);
+    const passes = Array.from({ length: 31 }, (_, i) => [hf({ line: 200 + i, evidence: [ev(200, 230)] })]);
     const { findings } = mergeAcrossPasses(passes);
     expect(findings).toHaveLength(1);
     expect(findings[0]!.body).toMatch(/Also at lines (\d+, ){5}\d+ and 24 more\.$/);
@@ -266,10 +266,53 @@ describe("mergeAcrossPasses anchors and body cap (v0.7.3)", () => {
 
   it("truncates an over-long body but keeps the Also at line; idempotent; never above 1500", () => {
     const long = "x".repeat(1500);
-    const { findings } = mergeAcrossPasses([[hf({ line: 1, evidence: [], body: long })], [hf({ line: 50, evidence: [], body: long })]]);
+    const { findings } = mergeAcrossPasses([[hf({ line: 1, evidence: [ev(1, 50)], body: long })], [hf({ line: 50, evidence: [ev(1, 50)], body: long })]]);
     const body = findings[0]!.body;
     expect(body.length).toBeLessThanOrEqual(1500);
     expect(body).toMatch(/…\n\nAlso at line \d+\.$/);
     expect(mergeAcrossPasses([findings]).findings[0]!.body).toBe(body);
+  });
+});
+
+describe("mergeAcrossPasses validated Also at (v0.7.4)", () => {
+  const files = parseUnifiedDiff(hookDiff(hookLines()));
+  const ctxFiles = parseUnifiedDiff(hookDiff(hookLines(), [12]));
+  // shape of v0.7.3 run 2: heading finding, second pass anchored on line 10 (outside every evidence range)
+  const first = hf({ line: 20, evidence: [ev(20, 21, "heading")] });
+  const second = (line: number) => hf({ line, evidence: [ev(20, 21, "heading")] });
+
+  it("omits an extra line outside every evidence range; the finding is kept", () => {
+    const { findings, merged } = mergeAcrossPasses([[first], [second(10)]], { diffFiles: files });
+    expect(merged).toBe(1);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.body).not.toContain("Also at");
+  });
+
+  it("keeps an extra line inside a range that is an added line", () => {
+    const { findings } = mergeAcrossPasses([[first], [hf({ line: 12, evidence: [ev(11, 13)] })]], { diffFiles: files });
+    expect(findings[0]!.body).toContain("Also at line 12.");
+  });
+
+  it("omits an extra line inside a range that is not an added line", () => {
+    const { findings } = mergeAcrossPasses([[first], [hf({ line: 12, evidence: [ev(11, 13)] })]], { diffFiles: ctxFiles });
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.body).not.toContain("Also at");
+  });
+
+  it("lists only the surviving locations", () => {
+    const { findings } = mergeAcrossPasses([[first], [hf({ line: 22, evidence: [ev(22, 23)] })], [second(10)]], { diffFiles: files });
+    expect(findings[0]!.body).toMatch(/Also at line 22\.$/);
+  });
+
+  it("without diff info only the evidence ranges apply", () => {
+    const { findings } = mergeAcrossPasses([[first], [second(10)]]);
+    expect(findings[0]!.body).not.toContain("Also at");
+  });
+
+  it("the cap of 6 and 'and K more' still hold with validation", () => {
+    const passes = Array.from({ length: 12 }, (_, i) => [hf({ line: 21 + i, evidence: [ev(21, 32)] })]);
+    const { findings } = mergeAcrossPasses(passes, { diffFiles: files });
+    expect(findings[0]!.body).toMatch(/Also at lines (\d+, ){5}\d+ and 5 more\.$/);
+    expect(findings[0]!.body.length).toBeLessThanOrEqual(1500);
   });
 });

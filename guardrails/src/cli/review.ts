@@ -17,7 +17,7 @@ import { DEFAULT_IGNORES, isIgnored } from "../core/paths";
 import { isModeName, MODE_NAMES, MODE_PRESETS, selectMode, statsOfDiff, type ModeName } from "../core/modes";
 import { reviewDiff, type ReviewMode, type ReviewOutput } from "../core/review";
 import { selectRulesForFiles } from "../core/rules";
-import { estimateRun, planSpend, PROFILES } from "../core/spend";
+import { estimateRun, planSpend, profileFromDiff } from "../core/spend";
 import type { Finding, ReviewInput } from "../core/types";
 import { LocalWorkspace } from "../core/workspace";
 
@@ -280,7 +280,7 @@ async function runReviewInner(opts: ReviewCliOptions, io: CliIO): Promise<number
   const budgetUsd = opts.budgetUsd ?? preset.budgetUsd;
 
   const plan = planSpend({
-    estimate: estimateRun(specLabel, opts.mode === "agent" ? preset.passes : 1, opts.mode === "agent" ? "agent" : "single"),
+    estimate: estimateRun(specLabel, opts.mode === "agent" ? preset.passes : 1, profileFromDiff(diff.length, files.length, opts.mode === "agent" ? selection.mode : "single")),
     budgetUsd,
     yes: opts.yes,
     dryRun: opts.dryRun,

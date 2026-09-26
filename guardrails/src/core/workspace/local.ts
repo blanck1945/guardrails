@@ -21,12 +21,17 @@ import {
 type GitResult = { code: number; stdout: string };
 
 export type LocalWorkspaceOptions = {
-  /** Root of a git checkout. `head` reads come from its working tree. */
+  /** Root of a git checkout. `head` reads come from the head revision, not from the working tree (v0.7.4). */
   root: string;
   /** Revision used for `ref: 'base'` reads and `diff()`. */
   baseRef?: string;
-  /** Revision used as the right side of `diff()`. Default `HEAD`. */
+  /** Revision used for `ref: 'head'` reads and as the right side of `diff()`. Default `HEAD`. */
   headRef?: string;
+  /**
+   * Read the working tree (tracked files, uncommitted edits included) instead of the head revision. Only for
+   * `init`, which documents the checkout as it is on disk. Reviews must not use it. Default false.
+   */
+  workingTree?: boolean;
 };
 
 function git(cwd: string, args: string[], timeoutMs = 30_000): Promise<GitResult> {
@@ -68,23 +73,29 @@ function assertSafeRef(ref: string): string {
   return ref;
 }
 
+/** One record of `git ls-tree -z`: `<mode> <type> <sha>TAB<path>`. */
+const TREE_RECORD = /^(\d+) (\w+) [0-9a-f]+\t([\s\S]*)$/;
+const SYMLINK_MODE = "120000";
+
 export class LocalWorkspace implements Workspace {
   private readonly root: string;
   private readonly baseRef?: string;
   private readonly headRef: string;
+  private readonly workingTree: boolean;
   private realRoot?: string;
 
   constructor(opts: LocalWorkspaceOptions) {
     this.root = path.resolve(opts.root);
     this.baseRef = opts.baseRef ? assertSafeRef(opts.baseRef) : undefined;
     this.headRef = assertSafeRef(opts.headRef ?? "HEAD");
+    this.workingTree = opts.workingTree === true;
   }
 
   private async getRealRoot(): Promise<string> {
     return (this.realRoot ??= await fs.realpath(this.root));
   }
 
-  /** Resolves a repo-relative path to a real file path inside the repo (follows symlinks, then checks). */
+  /** Working-tree mode only: resolves a repo-relative path to a real file inside the repo (follows symlinks, then checks). */
   private async resolveInside(rel: string): Promise<string> {
     const norm = normalizeRepoPath(rel);
     const realRoot = await this.getRealRoot();
@@ -101,6 +112,27 @@ export class LocalWorkspace implements Workspace {
     return real;
   }
 
+  /** Tree entry of `rev:path`, or null when it does not exist. */
+  private async treeEntry(rev: string, norm: string): Promise<{ mode: string; type: string; path: string } | null> {
+    const r = await git(this.root, ["ls-tree", "-z", rev, "--", norm]);
+    if (r.code !== 0) throw new WorkspaceError(`invalid revision: ${rev}`);
+    const rec = r.stdout.split("\0").find(Boolean);
+    const m = rec ? TREE_RECORD.exec(rec) : null;
+    return m ? { mode: m[1]!, type: m[2]!, path: m[3]! } : null;
+  }
+
+  /** Paths of the head tree that are symlinks. They are never followed, listed or searched. */
+  private async headSymlinks(): Promise<Set<string>> {
+    const r = await git(this.root, ["ls-tree", "-r", "-z", this.headRef]);
+    if (r.code !== 0) throw new WorkspaceError(`git ls-tree failed for ${this.headRef}`);
+    const out = new Set<string>();
+    for (const rec of r.stdout.split("\0")) {
+      const m = TREE_RECORD.exec(rec);
+      if (m && m[1] === SYMLINK_MODE) out.add(m[3]!);
+    }
+    return out;
+  }
+
   async readFile(input: ReadFileInput): Promise<ReadFileResult> {
     const ref = input.ref ?? "head";
     const norm = normalizeRepoPath(input.path);
@@ -110,11 +142,20 @@ export class LocalWorkspace implements Workspace {
       const r = await git(this.root, ["show", `${this.baseRef}:${norm}`]);
       if (r.code !== 0) throw new WorkspaceError(`file not found in base: ${input.path}`);
       text = r.stdout;
-    } else {
+    } else if (this.workingTree) {
       const real = await this.resolveInside(norm);
       const stat = await fs.stat(real);
       if (!stat.isFile()) throw new WorkspaceError(`not a file: ${input.path}`);
       text = await fs.readFile(real, "utf8");
+    } else {
+      // The head revision, never the working tree: the result does not depend on the checked-out branch.
+      const entry = await this.treeEntry(this.headRef, norm);
+      if (!entry) throw new WorkspaceError(`file not found: ${input.path}`);
+      if (entry.mode === SYMLINK_MODE) throw new WorkspaceError(`path resolves outside the repository (symlink): ${input.path}`);
+      if (entry.type !== "blob" || entry.path !== norm) throw new WorkspaceError(`not a file: ${input.path}`);
+      const r = await git(this.root, ["show", `${this.headRef}:${norm}`]);
+      if (r.code !== 0) throw new WorkspaceError(`file not found: ${input.path}`);
+      text = r.stdout;
     }
     return formatReadResult(text, norm, ref, input);
   }
@@ -123,12 +164,25 @@ export class LocalWorkspace implements Workspace {
     return `:(glob)${normalizeRepoPath(glob)}`;
   }
 
+  /** Searches the head revision (`git grep <headRef>`); the `<headRef>:` prefix git adds is stripped. */
   private async gitGrep(flags: string[], pattern: string, pathspec: string | undefined, max: number) {
-    const args = ["grep", "-n", "-I", "--no-color", ...flags, "-e", pattern, "--"];
+    const args = ["grep", "-n", "-I", "--no-color", ...flags, "-e", pattern, ...(this.workingTree ? [] : [this.headRef]), "--"];
     if (pathspec) args.push(pathspec);
     const r = await git(this.root, args, L.grepTimeoutMs);
-    if (r.code > 1) throw new WorkspaceError("git grep failed (invalid pattern?)");
-    const lines = r.stdout.split("\n").filter((l) => l.length > 0);
+    if (r.code > 1) throw new WorkspaceError("git grep failed (invalid pattern or head revision)");
+    if (this.workingTree) {
+      const own = r.stdout.split("\n").filter((l) => l.length > 0);
+      return { lines: own.slice(0, max), truncated: own.length > max };
+    }
+    const prefix = `${this.headRef}:`;
+    let lines = r.stdout
+      .split("\n")
+      .filter((l) => l.length > 0)
+      .map((l) => (l.startsWith(prefix) ? l.slice(prefix.length) : l));
+    if (lines.length) {
+      const links = await this.headSymlinks();
+      if (links.size) lines = lines.filter((l) => !links.has(/^(.*?):\d+:/.exec(l)?.[1] ?? ""));
+    }
     return { lines: lines.slice(0, max), truncated: lines.length > max };
   }
 
@@ -142,14 +196,31 @@ export class LocalWorkspace implements Workspace {
   }
 
   async listFiles(input: ListFilesInput = {}): Promise<ListFilesResult> {
-    let rev: string | undefined;
+    if (this.workingTree && input.ref !== "base") {
+      const w = await git(this.root, ["ls-files", "-z"]);
+      if (w.code !== 0) throw new WorkspaceError("git ls-files failed");
+      let own = w.stdout.split("\0").filter(Boolean);
+      if (input.glob) {
+        const isMatch = picomatch(normalizeRepoPath(input.glob), { dot: true });
+        own = own.filter((f) => isMatch(f));
+      }
+      own.sort();
+      const lim = Math.min(Math.max(1, Math.floor(input.limit ?? L.listMaxFiles)), 50_000);
+      return { files: own.slice(0, lim), truncated: own.length > lim };
+    }
+    let rev = this.headRef;
     if (input.ref === "base") {
       if (!this.baseRef) throw new WorkspaceError("no baseRef configured");
       rev = this.baseRef;
-    } else if (input.ref === "head") rev = this.headRef;
-    const r = await git(this.root, rev ? ["ls-tree", "-r", "-z", "--name-only", rev] : ["ls-files", "-z"]);
-    if (r.code !== 0) throw new WorkspaceError(rev ? `git ls-tree failed for ${rev}` : "git ls-files failed");
-    let files = r.stdout.split("\0").filter(Boolean);
+    }
+    const r = await git(this.root, ["ls-tree", "-r", "-z", rev]);
+    if (r.code !== 0) throw new WorkspaceError(`git ls-tree failed for ${rev}`);
+    let files: string[] = [];
+    for (const rec of r.stdout.split("\0")) {
+      const m = TREE_RECORD.exec(rec);
+      // Symlinks of the head tree are skipped, as in the tarball workspace.
+      if (m && !(rev === this.headRef && m[1] === SYMLINK_MODE)) files.push(m[3]!);
+    }
     if (input.glob) {
       const isMatch = picomatch(normalizeRepoPath(input.glob), { dot: true });
       files = files.filter((f) => isMatch(f));
@@ -176,11 +247,11 @@ export class LocalWorkspace implements Workspace {
       const m = /^(.*?):(\d+):(.*)$/.exec(l);
       if (!m) continue;
       references.push({
-        path: m[1],
+        path: m[1]!,
         line: Number(m[2]),
         kind: "reference",
         confidence: "name",
-        text: truncateLine(m[3].trim()),
+        text: truncateLine(m[3]!.trim()),
       });
     }
     return { references, truncated };

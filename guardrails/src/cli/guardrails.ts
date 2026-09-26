@@ -128,7 +128,7 @@ async function main(argv: string[]): Promise<number> {
 
   const root = path.resolve(values.path);
   const rulesFile = path.join(root, RULES_PATH);
-  const workspace = new LocalWorkspace({ root });
+  const workspace = new LocalWorkspace({ root, workingTree: true });
 
   // Estimate before spending: the input size is known from what the collector reads.
   const modelSpec = values.model ?? defaultModelSpec();

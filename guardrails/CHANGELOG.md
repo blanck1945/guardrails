@@ -3,6 +3,22 @@
 Each version has three parts: what we did, what we observed when we measured it, and what that made us do next.
 The "Next" of a version is the "What we did" of the following one. Newest first. See `CLAUDE.md` for the convention.
 
+## v0.7.4 — 2026-09-26
+### What we did
+- Validated "Also at". When the two `deep` passes are merged, an extra location is listed only if its line lies inside an evidence range of that finding's file (from either pass) and, when the diff is known, is an added line of that file. Otherwise it is omitted; the finding itself is never dropped and the primary anchor rule of v0.7.3 is unchanged. With no surviving location there is no "Also at" text. The cap of 6 extra locations ("and K more") and the 1500-character limit are kept. Two older fixtures without evidence ranges were given ranges.
+- Head reads come from the head revision. `LocalWorkspace` now reads head files with `git show <headRef>:<path>`, searches with `git grep <headRef>` (the ref prefix is stripped, so paths are unchanged) and lists files with `git ls-tree`, so `readFile`, `grep`, `findReferencesByName`, `listFiles` and the mechanical checks that read files no longer depend on the checked-out branch or on uncommitted edits. Symlinks of the head tree are rejected, not listed and not searched, as in the tarball workspace; an invalid head revision gives a clear error. Base reads are unchanged. `init` keeps reading the working tree through the explicit `workingTree: true` option, because it documents the checkout as it is on disk.
+- Dry-run estimate from the real diff. `profileFromDiff(diffChars, fileCount, mode)` sizes one run as 3k tokens of fixed overhead plus the diff (4 characters per token) read again 3 times in `standard` and 6 in `deep`, with output growing with the number of files; the CLI dry-run uses it, and the fixed profile remains only as a fallback where no diff exists. The constants live in one place (`DIFF_ESTIMATE`) with the measured runs they come from.
+- Tests (mock models and temporary git repos only): the exact v0.7.3 run 2 shape (line 10 omitted, line 12 kept), an extra line inside a range that is not an added line, no surviving location, the cap of 6; head reads with another branch checked out and an uncommitted edit, committed symlink, invalid head revision, working-tree mode; monotonic estimate, `deep` above `standard`, a 3-file 120-line diff within 3 times of the measured costs, and the CLI dry-run using it.
+
+### What we observed
+Verification pending; script provided (`run-v074-verify.sh`: `deep` twice on `v73/case-reminders` and `standard` once on `v73/csv-export`, with the clone kept on `base71` and the head passed explicitly, printing the dry-run estimate next to the real cost). Expected: 3 comments for 3 problems, every "Also at" line the same problem or absent, check findings identical to v0.7.3, and an estimate within 3 times of the real cost in every run.
+
+### Next (v0.8.0)
+- Coverage in the summary: which files and rules the review actually looked at.
+- Diff budget by whole files instead of truncating the diff.
+- Low-confidence `deep` findings in a collapsed block instead of dropping them or lowering the floor (D-041).
+- Record cost and duration of production reviews per mode from the Vercel logs.
+
 ## v0.7.3 — 2026-09-25
 ### What we did
 - Anchors respect the model's evidence ranges. For a finding, the ranges of its own file come first: a quoted snippet moves the anchor only when the match falls inside one of them (the model's line if it is one of those matches, otherwise the first). With no match inside a range, the model's line is kept when it is an added, commentable line inside a range; otherwise the anchor goes to the first added line of the best range (the one whose note shares the most words with the title; ties: the first). Ranges without any added commentable line are ignored, and without usable ranges the v0.7.2 behaviour is unchanged. This fixes the interface line (`businessDaysLeft: number;`, line 9) chosen over the function at lines 21 to 33.

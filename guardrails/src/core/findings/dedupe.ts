@@ -1,4 +1,5 @@
 import type { FindingV2 } from "./schema";
+import type { FileDiff } from "../diff";
 import { normalizeTitle } from "./fingerprint";
 
 const SEVERITY_RANK = { low: 0, medium: 1, high: 2 } as const;
@@ -8,6 +9,8 @@ export interface DedupeOptions {
   lineWindow?: number;
   /** Minimum Jaccard similarity of title tokens. */
   minSimilarity?: number;
+  /** Parsed diff of the change. When given, "Also at" lists only added lines of it (v0.7.4). */
+  diffFiles?: readonly FileDiff[];
 }
 
 function tokens(title: string): Set<string> {
@@ -116,8 +119,8 @@ export function mergeAcrossPasses<T extends FindingV2>(
   passes: readonly (readonly T[])[],
   opts: DedupeOptions = {},
 ): CrossPassMerge<T> {
-  const { lineWindow = 3, minSimilarity = 0.5 } = opts;
-  const out: { f: T; seen: Set<number>; also: Set<number> }[] = [];
+  const { lineWindow = 3, minSimilarity = 0.5, diffFiles } = opts;
+  const out: { f: T; seen: Set<number>; also: Set<number>; ranges: FindingV2["evidence"] }[] = [];
   let merged = 0;
   passes.forEach((list, pass) => {
     for (const f of list) {
@@ -132,11 +135,12 @@ export function mergeAcrossPasses<T extends FindingV2>(
         }
       }
       if (!best) {
-        out.push({ f, seen: new Set([pass]), also: new Set() });
+        out.push({ f, seen: new Set([pass]), also: new Set(), ranges: [...f.evidence] });
         continue;
       }
       merged++;
-      const ranges = [...best.f.evidence, ...f.evidence];
+      best.ranges.push(...f.evidence);
+      const ranges = best.ranges;
       const inRange = (x: T): boolean => ranges.some((e) => e.file === x.file && x.line >= Math.min(e.startLine, e.endLine) && x.line <= Math.max(e.startLine, e.endLine));
       const fIn = inRange(f);
       const bIn = inRange(best.f);
@@ -158,7 +162,14 @@ export function mergeAcrossPasses<T extends FindingV2>(
     }
   });
   const findings = out.map((o) => {
-    const lines = [...o.also].filter((l) => l !== o.f.line).sort((a, b) => a - b);
+    // v0.7.4: an extra location is listed only if it lies inside an evidence range of the finding's file
+    // (from either pass) and, when the diff is known, is an added line of that file.
+    const added = diffFiles?.find((d) => d.path === o.f.file)?.addedLines;
+    const lines = [...o.also]
+      .filter((l) => l !== o.f.line)
+      .filter((l) => o.ranges.some((e) => e.file === o.f.file && l >= Math.min(e.startLine, e.endLine) && l <= Math.max(e.startLine, e.endLine)))
+      .filter((l) => !diffFiles || (added?.includes(l) ?? false))
+      .sort((a, b) => a - b);
     if (!lines.length || ALSO_AT.test(o.f.body)) return o.f;
     return { ...o.f, body: withAlsoAt(o.f.body, lines) };
   });

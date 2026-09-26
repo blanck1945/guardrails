@@ -1,6 +1,7 @@
 import { BOTH_PASSES_BOOST, mergeAcrossPasses } from "../findings/dedupe";
 
 export { BOTH_PASSES_BOOST };
+import type { FileDiff } from "../diff";
 import type { FindingV2, RuleCheck } from "../findings";
 import { emptyUsage, type UsageTotals } from "./budget";
 import type { AgentRunResult } from "./loop";
@@ -39,10 +40,10 @@ function mergeRuleChecks(lists: readonly (readonly RuleCheck[] | undefined)[]): 
 }
 
 /** Combines the results of the passes that completed (at least one) into one run result. */
-export function mergeRuns(runs: readonly AgentRunResult[]): AgentRunResult & { merged: number } {
+export function mergeRuns(runs: readonly AgentRunResult[], diffFiles?: readonly FileDiff[]): AgentRunResult & { merged: number } {
   const notes = [...new Set(runs.flatMap((r) => (r.notes ? r.notes.split("; ") : [])))].join("; ");
   const ruleChecks = mergeRuleChecks(runs.map((r) => r.ruleChecks));
-  const union = mergeAcrossPasses(runs.map((r) => r.findings));
+  const union = mergeAcrossPasses(runs.map((r) => r.findings), diffFiles ? { diffFiles } : {});
   return {
     findings: union.findings,
     merged: union.merged,

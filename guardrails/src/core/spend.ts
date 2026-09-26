@@ -20,6 +20,43 @@ export const PROFILES = {
 
 export type ProfileName = keyof typeof PROFILES;
 
+/**
+ * Calibration of `profileFromDiff` (v0.7.4). Measured on `zai:glm-5.3` with the local CLI, small PRs of 2 to 3
+ * files: `standard` cost US$0.004 to 0.018 per review, `deep` (2 passes) US$0.022 to 0.043 (CHANGELOG v0.7.2 and
+ * v0.7.3). The fixed `agent` profile above printed about US$0.17 per run, about 10 times too much for those PRs.
+ * These constants come from a handful of runs: they are an order-of-magnitude estimate, not a quote.
+ */
+export const DIFF_ESTIMATE = {
+  /** Rules, system prompt and tool definitions sent on every run. */
+  overheadTokens: 3_000,
+  /** Characters per token used for the diff text. */
+  charsPerToken: 4,
+  /** How many extra times the diff is re-read as the agent's context grows, by mode. */
+  rereadSteps: { single: 0, basic: 1, standard: 3, deep: 6 },
+  /** Output tokens: a fixed part (summary, verdicts) plus a part per changed file, capped. */
+  outputBaseTokens: 500,
+  outputPerFileTokens: 300,
+  outputMaxTokens: 6_000,
+  /** Share of the input served from the prompt cache in agent modes (single mode has no cache). */
+  agentCachedShare: 0.5,
+} as const;
+
+export type DiffEstimateMode = keyof typeof DIFF_ESTIMATE.rereadSteps;
+
+/** Profile of ONE run (one pass) sized from the real diff: use `runs = number of passes` with `estimateRun`. */
+export function profileFromDiff(diffChars: number, fileCount: number, mode: DiffEstimateMode): RunProfile {
+  const c = DIFF_ESTIMATE;
+  const diffTokens = Math.ceil(Math.max(0, diffChars) / c.charsPerToken);
+  const steps = c.rereadSteps[mode];
+  const output = Math.min(c.outputMaxTokens, c.outputBaseTokens + c.outputPerFileTokens * Math.max(0, fileCount));
+  return {
+    inputTokens: c.overheadTokens + diffTokens * (1 + steps),
+    outputTokens: output,
+    cachedShare: mode === "single" ? 0 : c.agentCachedShare,
+    basis: `diff of ${diffChars} chars in ${fileCount} file(s), ${mode} mode (calibrated on a few runs)`,
+  };
+}
+
 /** Above this estimate a non-interactive run needs `--budget-usd` or `--yes`. */
 export const CONFIRM_THRESHOLD_USD = 1;
 

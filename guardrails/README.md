@@ -52,6 +52,12 @@ One problem, one comment: in `deep`, findings of the two passes that share the f
 
 Anchors follow the model's own evidence ranges: for a finding, only ranges of the same file count. A quoted snippet moves the anchor only when it falls inside one of those ranges; if it does not, the model's line is kept when it is already an added line inside a range, otherwise the anchor goes to the first added line of the best range. Without ranges the rule above applies unchanged. When the two `deep` passes are merged, the candidate whose line lies inside an evidence range wins over the one that does not. The merged body stays within the 1500-character schema limit: at most 6 extra locations are listed (`and K more.`) and, if needed, the original text is truncated, never the `Also at` line.
 
+"Also at" lists only locations that check out: an extra location of a merged finding appears only if its line lies inside an evidence range of the finding's file (from either pass) and is an added line of the diff; otherwise it is omitted. The finding itself is never dropped.
+
+Head files are read from the head revision (`git show`, `git grep`, `git ls-tree`), not from the working tree, so `review --base <ref> --head <ref>` gives the same result whichever branch is checked out and whatever is uncommitted. Symlinks in the head tree are ignored. (`init` reads the working tree on purpose.)
+
+The `--dry-run` estimate is sized from the real diff: about 3k tokens of fixed prompt, plus the diff (4 characters per token) read again 3 times in `standard` and 6 in `deep`, plus output that grows with the number of files. The constants were calibrated on a few real runs of small PRs (`standard` US$0.004 to 0.018, `deep` US$0.022 to 0.043), so it is an order-of-magnitude estimate, not a quote. Without a diff (for example `init`) a fixed profile is used.
+
 ### Choosing the mode (highest priority first)
 
 1. CLI: `guardrails review --mode basic|standard|deep`.

@@ -238,7 +238,7 @@ export async function reviewDiff(
         const done = settled.flatMap((s) => (s.status === "fulfilled" ? [s.value] : []));
         if (!done.length) throw (settled[0] as PromiseRejectedResult).reason;
         passesFailed = settled.length - done.length;
-        const union = mergeRuns(done);
+        const union = mergeRuns(done, diffFiles);
         merged = union.merged;
         run = union;
       } else run = await runOne();
