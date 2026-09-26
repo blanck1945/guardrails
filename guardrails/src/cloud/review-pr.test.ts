@@ -275,7 +275,9 @@ describe("reviewPullRequest: structured summary, stats and logs", () => {
     const parts = body(t).split("\n\n");
     expect(parts[0]).toBe("**Guardrails** · mode standard (default)");
     expect(parts[1]).toBe("1 finding: 0 from checks, 1 from the model");
-    expect(parts[2]).toBe("agent summary");
+    // v0.8.0: the coverage line goes after the counts and before the model notes (A.3).
+    expect(parts[2]).toMatch(/^Coverage: complete · 1 of 1 changed file reviewed/);
+    expect(parts[3]).toBe("agent summary");
   });
 
   it("omits the stats footer by default and when the flag is not exactly 1", async () => {

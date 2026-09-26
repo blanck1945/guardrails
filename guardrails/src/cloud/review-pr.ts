@@ -1,5 +1,22 @@
 import type { LanguageModel } from "ai";
-import { buildSummary, MODE_PRESETS, reviewDiff, selectMode, statsFooter, type Finding, type ReviewInput, type ReviewMode, type Rule } from "@/core";
+import {
+  buildSummary,
+  formatCoverageDetails,
+  formatCoverageLine,
+  formatObservationsBlock,
+  MODE_PRESETS,
+  reviewDiff,
+  selectMode,
+  splitLowConfidence,
+  statsFooter,
+  type CoverageFileInput,
+  type FallbackReason,
+  type Finding,
+  type ReviewInput,
+  type ReviewMode,
+  type Rule,
+} from "@/core";
+import { fileDiffText, packDiff } from "./diff-pack";
 import { commentableLines } from "./diff";
 import { DEFAULT_IGNORES, isIgnored } from "@/core/paths";
 import {
@@ -21,7 +38,10 @@ import type { PullRequestEvent, Triggers } from "./webhook";
 
 export const MAX_DIFF_CHARS = 200_000;
 
-/** The PR is bigger than what the MVP reviews in one call. */
+/**
+ * Kept for the failure classification and its notice. Since v0.8.0 the cloud no longer throws it: a big PR is packed
+ * by whole files (`packDiff`) and the files that do not fit are declared in the coverage.
+ */
 export class DiffTooLargeError extends Error {
   constructor(
     readonly chars: number,
@@ -71,7 +91,7 @@ export interface ReviewPrDeps {
 }
 
 /** Why the agent could not start, as a short stable label for logs (never the error message). */
-function fallbackReason(err: unknown): string {
+function fallbackReason(err: unknown): FallbackReason {
   if (err instanceof RepoTooLargeError) return "repo-too-large";
   if (err instanceof TarballDownloadError) return err.kind === "timeout" ? "download-timeout" : "download-failed";
   return "workspace-failed";
@@ -148,8 +168,18 @@ export async function reviewPullRequest(ev: PullRequestEvent, deps: ReviewPrDeps
   const signal = AbortSignal.timeout(Math.max(1, deadlineMs - (Date.now() - started)));
 
   const valid = new Map(reviewable.map((f) => [f.filename, commentableLines(f.patch)]));
-  const fullDiff = reviewable.map((f) => `--- a/${f.filename}\n+++ b/${f.filename}\n${f.patch}`).join("\n");
-  const diff = fullDiff.slice(0, MAX_DIFF_CHARS);
+  // The checks and the agent's workspace see the full diff; the model's prompt gets whole files up to the budget (D-028).
+  const patchFiles = reviewable.map((f) => ({ filename: f.filename, patch: f.patch! }));
+  const fullDiff = patchFiles.map(fileDiffText).join("\n");
+  const packed = packDiff(patchFiles, MAX_DIFF_CHARS);
+  const diff = packed.diff;
+  const overBudget = new Set(packed.overBudget);
+  const coverageFiles: CoverageFileInput[] = files.map((f) => {
+    if (f.status === "removed") return { path: f.filename, state: "removed" };
+    if (isIgnored(f.filename, ignored)) return { path: f.filename, state: "ignored", ignoredBy: isIgnored(f.filename, DEFAULT_IGNORES) ? "default-ignore" : "config-ignore" };
+    if (!f.patch) return { path: f.filename, state: "no-diff" };
+    return { path: f.filename, state: overBudget.has(f.filename) ? "over-budget" : "in-input" };
+  });
 
   const docs: ReviewInput["docs"] = {};
   const docPaths = [...DOC_PATHS, ...config.files.map((f) => f.path)];
@@ -163,6 +193,7 @@ export async function reviewPullRequest(ev: PullRequestEvent, deps: ReviewPrDeps
   // Agent mode: tarballs of base and head that the agent's tools read.
   let workspace: DisposableWorkspace | undefined;
   let mode: ReviewMode = settings.mode;
+  let fallback: FallbackReason | undefined;
   if (mode === "agent") {
     try {
       workspace = await createWorkspace({
@@ -178,29 +209,32 @@ export async function reviewPullRequest(ev: PullRequestEvent, deps: ReviewPrDeps
     } catch (err) {
       if (signal.aborted) throw err; // the review-wide timeout is not a reason to start over
       mode = "single";
-      log("review.fallback", { ...at, reason: fallbackReason(err), from: "agent", to: "single" });
+      fallback = fallbackReason(err);
+      log("review.fallback", { ...at, reason: fallback, from: "agent", to: "single" });
     }
   }
 
   const tracker = new CostTracker({ maxUsd: settings.budgetUsd ?? preset.budgetUsd });
   let result: Awaited<ReturnType<typeof reviewDiff>>;
+  // What only this function knows: every changed file with its state, the rules left out of scope and the fallback.
+  const coverage = { files: coverageFiles, rulesOutOfScope: loaded.active.length - rules.length, ...(fallback ? { fallback } : {}) };
   try {
     if (mode === "agent") {
       result = await reviewDiff(
-        { diff, docs, context: {}, title: pr.data.title, description: pr.data.body ?? "" },
-        { config: reviewConfig, model: deps.model, mode: "agent", workspace, costTracker: tracker, abortSignal: signal, reviewMode },
+        { diff, checksDiff: fullDiff, docs, context: {}, title: pr.data.title, description: pr.data.body ?? "" },
+        { config: reviewConfig, model: deps.model, mode: "agent", workspace, costTracker: tracker, abortSignal: signal, reviewMode, coverage },
       );
     } else {
       const context: ReviewInput["context"] = {};
       await Promise.all(
-        reviewable.slice(0, 15).map(async (f) => {
+        reviewable.filter((f) => !overBudget.has(f.filename)).slice(0, 15).map(async (f) => {
           const c = await readFile(octo, owner, repo, f.filename, headSha);
           if (c) context[f.filename] = c.slice(0, 30_000);
         }),
       );
       result = await reviewDiff(
-        { diff, docs, context, title: pr.data.title, description: pr.data.body ?? "" },
-        { config: reviewConfig, model: deps.model, costTracker: tracker, abortSignal: signal, reviewMode },
+        { diff, checksDiff: fullDiff, docs, context, title: pr.data.title, description: pr.data.body ?? "" },
+        { config: reviewConfig, model: deps.model, costTracker: tracker, abortSignal: signal, reviewMode, coverage },
       );
     }
   } finally {
@@ -208,6 +242,9 @@ export async function reviewPullRequest(ev: PullRequestEvent, deps: ReviewPrDeps
     await workspace?.dispose().catch(() => log("review.dispose-failed", at));
   }
   const ms = Date.now() - started;
+  // D-041: in deep, low-confidence model findings without a rule go to the collapsed block, not to inline comments.
+  const { published, observations } = splitLowConfidence(result.findings, selection.mode);
+  const cov = result.coverage;
   log("review.analyzed", {
     ...at,
     mode,
@@ -224,13 +261,30 @@ export async function reviewPullRequest(ev: PullRequestEvent, deps: ReviewPrDeps
     findings: result.findings.length,
     merged: result.merged,
     incomplete: result.incomplete === true,
+    // Coverage: numbers and codes only (no paths, no code).
+    filesChanged: cov.files.total,
+    filesReviewed: cov.files.byStatus.reviewed,
+    filesIgnored: cov.files.byStatus.ignored,
+    filesRemoved: cov.files.byStatus.removed,
+    filesNoDiff: cov.files.byStatus["no-diff"],
+    filesOverBudget: cov.files.byStatus["over-budget"],
+    filesChecksOnly: cov.files.byStatus["checks-only"],
+    filesOpened: cov.files.list.filter((f) => f.opened).length + cov.files.contextFilesOpened,
+    rulesInScope: cov.rules.inScope,
+    rulesByCheck: cov.rules.byCheck,
+    rulesByModel: cov.rules.byModel,
+    rulesWithVerdict: cov.rules.withVerdict,
+    verdictConflicts: cov.rules.verdictConflicts,
+    coverageComplete: cov.complete,
+    coverageReasons: cov.reasons,
+    lowConfidenceObservations: observations.total,
   });
   // The summary is built by code (mode, counts by origin, at most two lines of the model's notes).
   const summary = buildSummary({
     selection,
-    total: result.findings.length,
+    total: published.length,
     fromChecks: result.checks.findings,
-    fromModel: result.findings.length - result.checks.findings,
+    fromModel: published.length - result.checks.findings,
     merged: result.merged,
     omitted: result.omitted,
     notes: result.modelSummary,
@@ -238,11 +292,15 @@ export async function reviewPullRequest(ev: PullRequestEvent, deps: ReviewPrDeps
     modelIncomplete: result.modelIncomplete,
     passes: result.passes,
     passesFailed: result.passesFailed,
+    // `coverage` comes from the base config: details (default) | line | off.
+    coverageLine: config.coverage === "off" ? undefined : formatCoverageLine(cov),
+    coverageDetails:
+      config.coverage === "details" ? formatCoverageDetails(cov, observations) : observations.total ? formatObservationsBlock(observations) : undefined,
   });
   const showStats = (deps.env ?? process.env).GUARDRAILS_SHOW_STATS === "1";
 
-  const inline = result.findings.filter((f) => valid.get(f.file)?.has(f.line));
-  const orphan = result.findings.filter((f) => !inline.includes(f));
+  const inline = published.filter((f) => valid.get(f.file)?.has(f.line));
+  const orphan = published.filter((f) => !inline.includes(f));
 
   const body =
     summary +

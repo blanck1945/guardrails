@@ -60,6 +60,8 @@ export const configSchema = z.object({
    * can pick `basic` for their own PR, since the config is read from the base but the label/description come from the PR.
    */
   prOverride: z.enum(["labels", "none"]).default("labels"),
+  /** How much of the coverage report the review summary shows: line + collapsed details (default), the line only, or nothing. */
+  coverage: z.enum(["details", "line", "off"]).default("details"),
   strictness: z.number().int().min(1).max(3).default(2),
   commentTypes: z
     .array(z.enum(["logic", "security", "syntax", "style"]))

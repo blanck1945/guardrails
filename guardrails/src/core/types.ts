@@ -24,6 +24,8 @@ export type ReviewResult = z.infer<typeof reviewResultSchema>;
 /** Source-agnostic view of the code under review. No GitHub types here. */
 export interface ReviewInput {
   diff: string;
+  /** Diff the mechanical checks run over when it is larger than what the model receives (whole-file packing); default: `diff`. */
+  checksDiff?: string;
   /** Extra files the model may need, path -> content. */
   context: Record<string, string>;
   /** Repo docs (CONTRIBUTING, style guide), path -> content. */

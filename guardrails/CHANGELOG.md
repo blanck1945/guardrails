@@ -3,6 +3,24 @@
 Each version has three parts: what we did, what we observed when we measured it, and what that made us do next.
 The "Next" of a version is the "What we did" of the following one. Newest first. See `CLAUDE.md` for the convention.
 
+## v0.8.0 — 2026-09-26
+### What we did
+- Coverage in every review summary (D-027). After the counts line there is one line of at most 220 characters, for example `Coverage: complete · 4 of 5 changed files reviewed (1 ignored) · 5 rules in scope: 2 by checks, 3 by the model (3 with a verdict)`, and at the end a collapsed "What was reviewed" block (at most 8,000 characters) with a files table and a rules table. Two labels are kept apart: **check** (exact result of code for what the check tests) and **model** (the model's claim). Incomplete runs say why in the line (`partial (model ran out of time: checks only)`, `1 of 2 passes failed`, `3 files over the diff budget`, `repo download failed: single-call review`, `no verdict for 2 rules`; two reasons, then `+N more`). Paths that look like secrets are never printed. The renderer is pure and deterministic (`src/core/coverage-render.ts`).
+- Cloud wiring: every changed file now has a state (reviewed, ignored by default or config pattern, removed, without a patch, over the diff budget); the single-mode fallback and the number of active rules out of scope are passed in; the summary and the log carry the result. `review.analyzed` gains numbers and codes only: `filesChanged`, `filesReviewed`, `filesIgnored`, `filesRemoved`, `filesNoDiff`, `filesOverBudget`, `filesChecksOnly`, `filesOpened`, `rulesInScope`, `rulesByCheck`, `rulesByModel`, `rulesWithVerdict`, `verdictConflicts`, `coverageComplete`, `coverageReasons`, `lowConfidenceObservations`.
+- Config `coverage: "details" | "line" | "off"` (default `details`), read from the base commit like the rest of the config.
+- Whole-file diff packing (D-028): the model receives whole files up to the 200,000 character budget (PR order; a file that does not fit is skipped and later smaller files are still tried); nothing is cut mid-file and the excluded files are declared as `over budget`. The mechanical checks and the agent's workspace use the full diff (new optional `ReviewInput.checksDiff`), so a check finding in a file that did not fit is still published. `DiffTooLargeError` and its notice are kept for the failure classification (they are not thrown any more).
+- Low-confidence `deep` findings (D-041): a model finding below 0.6 confidence without a rule is no longer posted as an inline comment; it is listed (file and title, at most 5) in the collapsed block, or in its own collapsed block when `coverage` is `line` or `off`. The collection threshold (0.4), checks and rule findings are unchanged.
+- CLI: `guardrails review` prints the coverage line and, with `--details`, the block; `--json` already carried `coverage`.
+- Tests (mock models only): renderer limits, labels, reasons, secrets, determinism; packing; cloud statuses and over-budget with a check finding still published; fallback visible; config read from base; log fields; the D-041 threshold, cap and untouched rule/check findings; CLI. One existing assertion changed by design (the summary now has a coverage paragraph before the model notes).
+
+### What we observed
+Verification pending. `C:/Users/elabu/AppData/Local/Temp/run-v080-verify.sh` runs `standard` and `deep` on `v73/case-reminders`, `standard` on `v73/csv-export` and on `v73/clients-page`, on the local clone, and prints the coverage details. Expected: case-reminders shows 7 files reviewed and 5 rules in scope with their split; csv-export shows its two check results under `check`; clients-page is clean with a coverage line; no published finding differs from v0.7.5 apart from low-confidence `deep` ones moved to the block.
+
+### Next (v0.9.0)
+- Review record v1: a hidden, signed marker at the end of the summary (D-029, D-030) so a review can be counted later.
+- `guardrails report`: Markdown and CSV from the records plus live feedback signals (D-031).
+- Cost and duration visible by default.
+
 ## v0.7.5 — 2026-09-26
 ### What we did
 Part 1 of v0.8.0 (the user-visible v0.8.0 is published after part 2 wires it). Core only: no change in what is published, no new findings, no cloud or CLI wiring.

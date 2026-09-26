@@ -11,3 +11,4 @@ export * from "./sampling";
 export * from "./modes";
 export * from "./summary";
 export * from "./coverage";
+export * from "./coverage-render";

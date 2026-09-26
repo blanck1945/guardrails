@@ -215,3 +215,35 @@ describe("parseReviewArgs", () => {
     expect(() => parseReviewArgs(["--budget-usd", "-1"])).toThrow();
   });
 });
+
+describe("guardrails review: coverage", () => {
+  it("human output prints the coverage line; --details adds the block", async () => {
+    const { repo } = makeRepo();
+    const plain = io();
+    await runReview(opts(repo, modelReporting([finding()])), plain.handle);
+    const text = plain.out.join("\n");
+    expect(text).toMatch(/Coverage: (complete|partial \(.*\)) · \d+ of \d+ changed files? reviewed/);
+    expect(text).not.toContain("<details>");
+
+    const detailed = io();
+    await runReview(opts(repo, modelReporting([finding()]), { details: true }), detailed.handle);
+    const full = detailed.out.join("\n");
+    expect(full).toContain("<details><summary>What was reviewed</summary>");
+    expect(full).toContain("| `src/a.ts` |");
+    expect(full).toContain("**check** = exact result of code");
+  });
+
+  it("--json carries the coverage object", async () => {
+    const { repo } = makeRepo();
+    const c = io();
+    await runReview(opts(repo, modelReporting([finding()]), { json: true }), c.handle);
+    const json = JSON.parse(c.out.join("\n"));
+    expect(json.coverage).toMatchObject({ files: { total: expect.any(Number) }, engine: { mode: "agent" } });
+    expect(Array.isArray(json.coverage.reasons)).toBe(true);
+  });
+
+  it("parses --details", () => {
+    expect(parseReviewArgs(["--details"])).toMatchObject({ details: true });
+    expect(parseReviewArgs([])).toMatchObject({ details: false });
+  });
+});

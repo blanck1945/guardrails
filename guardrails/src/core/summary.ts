@@ -18,6 +18,10 @@ export interface SummaryInput {
   modelIncomplete?: "budget" | "timeout" | "error" | undefined;
   passes?: number | undefined;
   passesFailed?: number | undefined;
+  /** The visible coverage line (see `formatCoverageLine`); goes after the counts, before the notes. */
+  coverageLine?: string | undefined;
+  /** The collapsed details block (see `formatCoverageDetails`); goes last. */
+  coverageDetails?: string | undefined;
 }
 
 const FAILURE_TEXT = { budget: "it reached its spend limit", timeout: "it ran out of time", error: "it failed" } as const;
@@ -55,7 +59,7 @@ export function buildSummary(s: SummaryInput): string {
     s.modelIncomplete ? `The model-based review did not complete (${FAILURE_TEXT[s.modelIncomplete]}); only the mechanical check results are shown.` : "",
   ].filter(Boolean);
   const notes = noteLines(s.notes);
-  return [header, [counts, ...status].join(" "), notes.join("\n")].filter(Boolean).join("\n\n");
+  return [header, [counts, ...status].join(" "), s.coverageLine ?? "", notes.join("\n"), s.coverageDetails ?? ""].filter(Boolean).join("\n\n");
 }
 
 export interface StatsInput {

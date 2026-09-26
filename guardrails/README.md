@@ -23,7 +23,7 @@ All commands run from this directory as `pnpm guardrails <command>`.
 - `--model <id>` overrides `GUARDRAILS_MODEL`.
 - `--budget-usd N` stops the run when the estimated spend reaches N. `--dry-run` prints the estimate and calls nothing. `--yes` accepts an estimate above US$1.
 - `init` also takes `--timeout-sec N` (default 180, 0 = none): aborts the model calls with a clear error. It prints progress per stage (collect, synthesize, filter, write) on stderr, suggests at most 15 rules, and checks every rule scope against the tracked files (repairs an unambiguous truncated name, drops dead globs, lists them under "Scope warnings").
-- `--json` prints machine-readable output. `--fail-on high|medium|low|none` sets the severity that fails the run (default `high`).
+- `--json` prints machine-readable output; `--details` adds the coverage details block. `--fail-on high|medium|low|none` sets the severity that fails the run (default `high`).
 
 Exit codes: `0` no findings at or above the threshold, `1` findings at or above it, `2` usage or infrastructure error (bad arguments, missing API key, git error, incomplete review), `3` budget cut.
 
@@ -90,7 +90,7 @@ Conditions of one entry are combined with AND: `filesGreaterThan`, `filesLessTha
 ## Configuration
 
 `.guardrails/rules.md` holds the rules (one `## <id>` block each, with `scope`, `severity`, `type`, `source`, `status`). `type` (`logic|security|syntax|style`, default `style`) is the type of the finding when the rule is violated: the rule decides it, not the model.
-`.guardrails/config.json` holds `mode`, `autoMode`, `prOverride`, `strictness`, `commentTypes`, `ignorePatterns`, `triggers` and so on.
+`.guardrails/config.json` holds `mode`, `autoMode`, `prOverride`, `strictness`, `commentTypes`, `ignorePatterns`, `coverage`, `triggers` and so on.
 See `PLAN-DETAILED.md` section 6.4 (in the repository root) for the format.
 
 ### Mechanical checks (`check:`)
@@ -134,14 +134,18 @@ check-coverage: exhaustive
 Limits of `only`: regex literals are not recognised by the lexer, JSX text between tags counts as code, other file types are skipped. Without a workspace (the cloud single-mode fallback) `max-lines`, `colocated-test` and `only` are skipped and the model handles those rules.
 `guardrails init` proposes a `check:` when a rule allows it and drops an invalid one with a warning.
 
-## Coverage data (core)
+## Coverage report
 
-`reviewDiff` returns a `coverage` object (`computeCoverage`, `src/core/coverage.ts`) that says what the review actually examined, keeping what code guarantees ("check") apart from what the model claims ("model"). It is data only: nothing is published from it yet (the summary line and details block come with the cloud and CLI wiring).
+`reviewDiff` returns a `coverage` object (`computeCoverage`, `src/core/coverage.ts`) that says what the review actually examined, keeping what code guarantees ("check") apart from what the model claims ("model"). Every review summary shows it: one line (at most 220 characters) after the counts, and a collapsed "What was reviewed" block (at most 8,000 characters) with a table of files and a table of rules. In `deep`, model findings below 0.6 confidence without a rule are not posted as comments: they are listed (file and title, at most 5) in that block as lower-confidence observations.
 
 - **Files**: each changed file has one status: `removed`, `ignored`, `no-diff`, `over-budget`, `checks-only` (its patch was in the model input but the model part did not complete) or `reviewed` (its diff was in the model input and the model finished; not "every line was analysed"), plus an `opened` flag (the agent read it at head).
 - **Rules**: each rule in scope is `check`, `check+model`, `check-failed+model` or `model`, with the result of the check part (`k violations` / `none found`) and of the model part (`reported`, `violated, not published`, `ok`, `not applicable`, `not asked`, `no verdict`, `not run`).
 - **Complete or not**: `complete` is true when none of the stable reason codes applies (`model-timeout`, `model-budget`, `model-error`, `no-valid-report`, `pass-failed`, `step-budget`, `missing-verdicts`, `diff-over-budget`, `single-fallback`, `checks-skipped`).
-- Callers that know more (removed, ignored or patch-less files, the single-mode fallback) pass it in `ReviewOptions.coverage`. The object holds only paths, rule ids, counters and status words, never code.
+- Callers that know more (removed, ignored or patch-less files, the single-mode fallback) pass it in `ReviewOptions.coverage`. The object holds only paths, rule ids, counters and status words, never code. Paths that look like secrets (`.env*`, keys, certificates) are never printed in the details.
+- **check** is the exact result of code for what the check tests. **model** is the model's claim and can be wrong; a model "ok" is not a guarantee. Coverage measures what was looked at, not whether it was looked at correctly.
+- **Diff budget:** the model receives whole files up to 200,000 characters of diff; a file that does not fit is never cut, it is marked `over the diff budget` and the mechanical checks still run over it (they always run over the full diff).
+- **Config** (`.guardrails/config.json`, read from the base commit): `"coverage": "details"` (default: line plus details block), `"line"` (the line only) or `"off"` (nothing).
+- **CLI:** `guardrails review` prints the coverage line; `--details` also prints the block, and `--json` includes the `coverage` object.
 
 ## Environment variables
 

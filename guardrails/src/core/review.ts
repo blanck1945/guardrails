@@ -155,7 +155,7 @@ export async function reviewDiff(
   };
 
   // Mechanical checks run first and independently of the model; their findings are never filtered or capped.
-  const checkOutcome = await runChecks({ rules: config.rules, files: parseUnifiedDiff(input.diff), workspace }).catch(() => ({
+  const checkOutcome = await runChecks({ rules: config.rules, files: parseUnifiedDiff(input.checksDiff ?? input.diff), workspace }).catch(() => ({
     findings: [] as Finding[],
     ran: [] as string[],
     exhaustive: [] as string[],

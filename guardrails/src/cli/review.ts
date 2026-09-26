@@ -10,7 +10,7 @@
 import { execFile } from "node:child_process";
 import type { LanguageModel } from "ai";
 import { parseArgs } from "node:util";
-import { defaultConfig, loadRules, type Rule } from "../core";
+import { defaultConfig, formatCoverageDetails, formatCoverageLine, loadRules, type Rule } from "../core";
 import { BudgetExceededError, CostTracker } from "../core/cost";
 import { defaultModelSpec, MissingApiKeyError } from "../core/models";
 import { DEFAULT_IGNORES, isIgnored } from "../core/paths";
@@ -23,7 +23,7 @@ import { LocalWorkspace } from "../core/workspace";
 
 export const REVIEW_USAGE =
   "Usage: guardrails review [--path <repo>] [--base <ref>] [--head <ref>] [--mode basic|standard|deep] [--engine agent|single] [--model <id>]\n" +
-  "                         [--budget-usd <N>] [--dry-run] [--yes] [--json] [--fail-on high|medium|low|none]";
+  "                         [--budget-usd <N>] [--dry-run] [--yes] [--json] [--details] [--fail-on high|medium|low|none]";
 
 const RULES_PATH = ".guardrails/rules.md";
 const CONFIG_PATH = ".guardrails/config.json";
@@ -47,6 +47,8 @@ export interface ReviewCliOptions {
   dryRun: boolean;
   yes: boolean;
   json: boolean;
+  /** Print the coverage details block (the coverage line is always printed unless the config says `coverage: "off"`). */
+  details?: boolean | undefined;
   failOn: FailOn;
   interactive: boolean;
 }
@@ -74,6 +76,7 @@ export function parseReviewArgs(argv: string[]): ReviewCliOptions {
       "dry-run": { type: "boolean", default: false },
       yes: { type: "boolean", default: false },
       json: { type: "boolean", default: false },
+      details: { type: "boolean", default: false },
       "fail-on": { type: "string", default: "high" },
     },
   });
@@ -97,6 +100,7 @@ export function parseReviewArgs(argv: string[]): ReviewCliOptions {
     dryRun: values["dry-run"] as boolean,
     yes: values.yes as boolean,
     json: values.json as boolean,
+    details: values.details as boolean,
     failOn: failOn as FailOn,
     interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY),
   };
@@ -196,6 +200,8 @@ function formatHuman(
   rules: readonly Rule[],
   meta: { base: string; head: string; model: string; files: number },
   failOn: FailOn,
+  coverage: "details" | "line" | "off" = "line",
+  details = false,
 ): string {
   const lines: string[] = [];
   lines.push(`Guardrails review: ${meta.base.slice(0, 8)}..${meta.head.slice(0, 8)} (${meta.files} file(s)), mode ${out.mode}, model ${meta.model}`);
@@ -222,6 +228,10 @@ function formatHuman(
   if (out.notes) lines.push(`Notes: ${out.notes}`);
   if (out.checks.findings || out.checks.ran.length) lines.push(`Mechanical checks: ${out.checks.findings} finding(s); rules checked: ${out.checks.ran.join(", ") || "none"}`);
   if (out.modelIncomplete) lines.push(`The model part did not complete (${out.modelIncomplete}); only mechanical check findings are shown.`);
+  if (coverage !== "off") {
+    lines.push(formatCoverageLine(out.coverage));
+    if (details) lines.push(formatCoverageDetails(out.coverage));
+  }
   lines.push(`Cost: ${out.costUsd === null ? "unknown (no known price)" : `$${out.costUsd.toFixed(5)}`}; ${out.usage.steps} step(s), ${out.usage.inputTokens} input / ${out.usage.outputTokens} output tokens`);
   lines.push(failOn === "none" ? "Threshold: none (never fails)." : `Threshold: fail on ${failOn} or higher.`);
   return lines.join("\n");
@@ -322,7 +332,7 @@ async function runReviewInner(opts: ReviewCliOptions, io: CliIO): Promise<number
   if (opts.json) {
     io.out(JSON.stringify({ base: baseSha, head: headSha, model: specLabel, reviewMode: selection.mode, rules: rules.map((r) => r.id), ...out, blocking: blocking.length }, null, 2));
   } else {
-    io.out(formatHuman(out, rules, { base: baseSha, head: headSha, model: specLabel, files: files.length }, opts.failOn));
+    io.out(formatHuman(out, rules, { base: baseSha, head: headSha, model: specLabel, files: files.length }, opts.failOn, config.coverage, opts.details === true));
   }
   // Check findings survive a failed model part; only a review with nothing to show is an infrastructure error.
   if (out.incomplete && !blocking.length) return 2;
