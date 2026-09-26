@@ -52,7 +52,8 @@ New modes or presets, model per mode, incremental re-review, checks in productio
 None blocking.
 
 ## Execution
-_Pending._
+
+_Executed._ Commit ac256e3 (v0.7.3). Verification run by the orchestrator (5 deep runs, US$0.144): 9 of 9 anchors correct on case-reminders, csv-export two comments from checks, clean branch with no findings. Released in 68c5ccb.
 
 ## Quality
 Written by the orchestrator from the v0.7.2 verification results (three real deep runs on the local clone of causas-viewer).

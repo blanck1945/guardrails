@@ -216,7 +216,7 @@ Code changes in this run. Changing App permissions (`contents: write`) or events
 
 ## Execution
 
-_Pending — do not execute until explicitly requested._
+_Plan accepted by the user in part._ Q1 was answered "allow"; Q2: prepaid balance; Q5 and Q6 accepted; Q4 left to the default. Steps executed: v0.7.1 was implemented, verified with a real run and released (commit dffc606, deployed with 8ed37e2); the release gate became D-023. Later tasks: v0.7.2 and v0.7.3.
 
 ## Quality
 

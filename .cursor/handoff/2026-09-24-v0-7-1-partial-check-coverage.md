@@ -46,7 +46,8 @@ Changing the accent regex itself, new check kinds, mode presets, cloud infrastru
 None blocking. Whether `forbid-import` should default to exhaustive is left as partial, the conservative choice.
 
 ## Execution
-_Pending._
+
+_Executed._ Commit dffc606 (v0.7.1). The first verification attempts were blocked twice by the permission classifier; the user then authorized a script that the orchestrator ran. Result: `Recordatorios` reported again by the model, clean branch with no findings, US$0.029. Released with 8ed37e2.
 
 ## Quality
 Written by the orchestrator from the B45 report of the previous executor run.

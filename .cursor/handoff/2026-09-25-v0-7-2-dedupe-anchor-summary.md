@@ -54,7 +54,8 @@ New modes, model per mode, incremental re-review, checks in production `rules.md
 None blocking.
 
 ## Execution
-_Pending._
+
+_Executed._ Commit 7a1d53f (v0.7.2). Verification run by the orchestrator (3 deep runs): 3 comments for 3 problems, no duplicates; 1 of 6 anchors on a wrong line (fixed in v0.7.3). Released in ea17f19.
 
 ## Quality
 Written by the orchestrator from the v0.7.1 production smoke test. Line numbers in the expected results come from the answer key of the test PRs (post-blind).

@@ -121,6 +121,21 @@ Cómo mantenerlo: cada decisión nueva se agrega al final con el siguiente núme
 - **Descartado:** mejorar la expresión regular de acentos (no cubre el español sin acentos en general) y volver a que el modelo revise todas las reglas ignorando los chequeos (pierde el determinismo de D-015).
 - **Consecuencia:** las reglas parciales vuelven al prompt del modelo, así que cuestan algo más ($0.018 contra $0.007 a $0.012 en `case-reminders`; dos corridas, no hay tendencia).
 - **Decidido por:** el orquestador, tras la medición B45; nació de un error propio del diseño anterior.
+### D-025 — Unir los hallazgos de las dos pasadas de `deep` por significado, no por distancia de líneas
+- **Fecha:** 2026-09-25 · **Estado:** Vigente (v0.7.2)
+- **Decisión:** dos hallazgos de pasadas distintas son el mismo problema si comparten archivo y regla (o, sin regla, un título parecido), sin importar cuántas líneas los separen. Se unen en un solo comentario con la mayor severidad y la mayor confianza (+0.1 si lo vieron ambas), y con una línea "Also at…" con las otras ubicaciones. Solo se une entre pasadas y de a uno.
+- **Por qué:** la prueba en producción de `guardrails:deep` dejó 6 comentarios para 3 problemas: las dos pasadas apuntaron al mismo problema con 7 líneas de diferencia y la ventana de 3 líneas no los unió.
+- **Descartado:** ensanchar la ventana de líneas (uniría problemas distintos cercanos) y quitar la segunda pasada (pierde el recall que aporta `deep`).
+- **Consecuencia:** la unión depende de los identificadores de regla y de los títulos que produzcan las pasadas: un hallazgo sin regla y con títulos muy distintos seguiría duplicado.
+- **Decidido por:** el orquestador, a partir de la medición en producción.
+
+### D-026 — El ancla del comentario respeta los rangos de evidencia del modelo
+- **Fecha:** 2026-09-25 · **Estado:** Vigente (v0.7.3)
+- **Decisión:** para elegir la línea de un comentario, primero cuentan los rangos de evidencia que el modelo dio para ese archivo. Una coincidencia de texto solo vale dentro de un rango; si el modelo ya dio una línea válida dentro del rango, se conserva; y al unir duplicados se prefiere el ancla que cae dentro de la evidencia. El texto "Also at…" lista como máximo 6 ubicaciones.
+- **Por qué:** en la verificación de la v0.7.2, 1 ancla de 6 cayó en la línea 9 (un campo de una interfaz) porque el anclaje por texto coincidió con un fragmento de un identificador e ignoró el rango de evidencia 21 a 33. Con el cambio, 9 de 9 anclas correctas.
+- **Descartado:** confiar solo en el número de línea del modelo (era impreciso en producción) y anclar solo por coincidencia de texto (el error que se corrigió).
+- **Consecuencia:** si el modelo da un rango equivocado, el ancla lo sigue. Las ubicaciones extra de "Also at" todavía no se validan (anotado para la v0.7.4).
+- **Decidido por:** el orquestador, a partir de la verificación de la v0.7.2.
 ---
 
 ## Validación y proceso
