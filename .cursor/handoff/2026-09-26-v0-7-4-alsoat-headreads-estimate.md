@@ -56,7 +56,8 @@ Coverage report, diff budget by whole files, collapsed low-confidence findings, 
 None blocking.
 
 ## Execution
-_Pending._
+
+_Executed._ Commit 4535841 (v0.7.4), released in bc1cd2e. Verification run by the orchestrator (3 runs, US$0.074, head branches never checked out): estimate within 1.6 to 1.9 times of the real cost; one anchor two lines above (fixed in v0.7.5).
 
 ## Quality
 Written by the orchestrator from step 1 of the roadmap plan and the v0.7.3 verification results.

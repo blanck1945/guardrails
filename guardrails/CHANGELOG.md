@@ -14,8 +14,20 @@ The "Next" of a version is the "What we did" of the following one. Newest first.
 - Tests (mock models only): renderer limits, labels, reasons, secrets, determinism; packing; cloud statuses and over-budget with a check finding still published; fallback visible; config read from base; log fields; the D-041 threshold, cap and untouched rule/check findings; CLI. One existing assertion changed by design (the summary now has a coverage paragraph before the model notes).
 
 ### What we observed
-Verification pending. `C:/Users/elabu/AppData/Local/Temp/run-v080-verify.sh` runs `standard` and `deep` on `v73/case-reminders`, `standard` on `v73/csv-export` and on `v73/clients-page`, on the local clone, and prints the coverage details. Expected: case-reminders shows 7 files reviewed and 5 rules in scope with their split; csv-export shows its two check results under `check`; clients-page is clean with a coverage line; no published finding differs from v0.7.5 apart from low-confidence `deep` ones moved to the block.
+Real verification, local CLI with `--details`, `zai:glm-5.3`, temperature 0, `--budget-usd 0.10` per run, on the temporary clone of `causas-viewer` (base branch `base71`, push disabled; the head branches `v73/*` were passed with `--head` and never checked out). Four runs, US$0.080 in total.
 
+| Run | Coverage line | Findings | Cost | Time |
+|---|---|---|---|---|
+| case-reminders standard | complete, 7 of 7 files, 5 rules: 2 by checks, 3 by the model (3 with a verdict) | 3 (1 check, 2 model) | 0.0166 | 23 s |
+| case-reminders deep | same coverage line | 3 (1 check, 2 model) | 0.0377 | 27 s |
+| csv-export standard | complete, 5 of 5 files, same split | 2 (both check) | 0.0087 | 17 s |
+| clients-page standard (clean) | complete, 8 of 8 files, same split | none | 0.0174 | 26 s |
+
+- **The rule table matched the known truth in all 20 rows** (5 rules by 4 runs): `colocated-tests` and `one-component-per-file` fully by checks, `deadline-logic-centralized` reported by the model in case-reminders and `not applicable` on the clean PR, and `layered-data-access` showing "check: none found (pattern only) · model: ok" where the code was fine and "check: 1 violation · model: violated, not published" on csv-export, where the model agreed with the check and did not repeat it.
+- **The labels do their job:** "(pattern only)" appears wherever a partial check found nothing, so a silent partial check is not read as a guarantee. The legend says "check = exact result of code for what the check tests; model = the model's claim; it can be wrong".
+- The published findings did not change against v0.7.4 for the same runs (the same three problems in case-reminders, the same two checks in csv-export, none on the clean branch). No low-confidence finding appeared in `deep` this time, so the collapsed block for D-041 was not exercised in a real run (only in unit tests).
+- Cost of `standard` on the small PRs stayed in the earlier range (0.009 to 0.017); `deep` on case-reminders cost 0.038. Coverage adds no model calls.
+- **What was not verified:** the whole-file packing over the 200,000-character budget and the cloud states of removed, ignored and patch-less files were tested with unit tests only; the real runs were local, where those states are not available (the CLI lists only reviewable files). The behaviour in production (a real PR with the coverage block) is verified after the release.
 ### Next (v0.9.0)
 - Review record v1: a hidden, signed marker at the end of the summary (D-029, D-030) so a review can be counted later.
 - `guardrails report`: Markdown and CSV from the records plus live feedback signals (D-031).

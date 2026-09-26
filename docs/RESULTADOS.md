@@ -2,7 +2,7 @@
 
 Qué salió bien y qué salió mal en **todas** las mediciones hechas hasta la v0.7.1, en un solo lugar. Es un resumen: el detalle de cada versión está en `guardrails/CHANGELOG.md` (sección *What we observed*), y el porqué de cada decisión en `DECISIONS.md`.
 
-Actualizado: 2026-09-26 (producción en la v0.7.3; v0.7.4 verificada en local, pendiente de subir).
+Actualizado: 2026-09-26 (producción en la v0.7.4; v0.8.0 verificada en local, pendiente de subir).
 
 ---
 
@@ -114,6 +114,18 @@ Total: **6 de 7 ubicaciones sembradas, 0 falsos positivos, 0 hallazgos extra.** 
 - ✅ **La estimación previa ahora queda entre 1,6 y 1,9 veces del costo real** (antes era unas 10 veces).
 - ✅ **"Also at" no mostró ubicaciones engañosas.**
 - ⚠️ **Una ancla dos líneas arriba:** el modelo dio un rango de evidencia equivocado (9 a 11) y otro correcto (12), y al unir las pasadas ganó el de la pasada con mayor severidad. Anotado para la v0.8.0.
+
+### M11 — Cobertura visible en cada revisión (v0.8.0, local, 4 corridas, $0.080)
+| Corrida | Línea de cobertura | Hallazgos |
+|---|---|---|
+| Recordatorios `standard` y `deep` | completa, 7 de 7 archivos, 5 reglas (2 por chequeo y 3 por el modelo) | 3, igual que antes |
+| Exportar CSV `standard` | completa, 5 de 5 archivos | 2, ambos por chequeo |
+| Clientes (limpio) | completa, 8 de 8 archivos | ninguno |
+
+- ✅ **La tabla de reglas coincidió con la realidad en las 20 filas.** Por ejemplo, donde la regla de arquitectura se cumplía dice "check: nada encontrado (solo patrón) · modelo: ok", y donde se violaba dice "check: 1 violación · modelo: violación, no publicada" (el modelo coincidió con el chequeo y no lo repitió).
+- ✅ **Los rótulos cumplen su función:** "solo patrón" aparece cuando un chequeo parcial no encontró nada, para que ese silencio no se lea como garantía; la leyenda aclara que lo del modelo "puede estar equivocado" y que la cobertura dice qué se miró, no que se haya mirado bien.
+- ✅ Los hallazgos publicados no cambiaron y la cobertura no agrega llamadas al modelo.
+- ⚠️ **No verificado en real:** el empaquetado por archivos completos con un diff de más de 200.000 caracteres, los estados de archivos eliminados, ignorados o sin diff (solo en la nube) y el bloque plegado de baja confianza de `deep`. Están probados con tests, no con corridas reales.
 
 ### M6 — `guardrails init` (derivar reglas de un repo)
 | Repo | Reglas propuestas | Descartadas por ya estar cubiertas | Tiempo | Costo |
