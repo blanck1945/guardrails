@@ -2,7 +2,7 @@
 
 Qué salió bien y qué salió mal en **todas** las mediciones hechas hasta la v0.7.1, en un solo lugar. Es un resumen: el detalle de cada versión está en `guardrails/CHANGELOG.md` (sección *What we observed*), y el porqué de cada decisión en `DECISIONS.md`.
 
-Actualizado: 2026-09-27 (producción en la v0.8.0; v0.8.1 verificada en local, pendiente de subir).
+Actualizado: 2026-09-27 (producción en la v0.8.0; v0.8.1 y v0.8.2 verificadas en local, pendientes de subir).
 
 ---
 
@@ -146,6 +146,17 @@ Total: **6 de 7 ubicaciones sembradas, 0 falsos positivos, 0 hallazgos extra.** 
 - ✅ La línea de cobertura sigue intacta y no hubo comentarios duplicados.
 - ⚠️ **Lo que esta prueba no demuestra:** en estas corridas el modelo no repitió por su cuenta la violación de arquitectura, así que la unión probablemente no se ejerció con una salida real; está probada con tests unitarios (31 nuevos). Falta una corrida real en la que el modelo repita la violación.
 - ⚠️ **Costo de diseño:** si el chequeo y el modelo encuentran dos violaciones distintas de la misma regla en un mismo archivo, la segunda queda como una línea "Also at", sin su propio texto.
+
+### M14 — Títulos con acción e idioma configurable (v0.8.2, local, 3 corridas, $0.028)
+| Corrida | Resultado | Costo |
+|---|---|---|
+| PR #9, inglés | Títulos nuevos con acción, en inglés | $0.006 |
+| PR #9, español | Títulos, cobertura y el propio hallazgo del modelo en español; código y rutas sin traducir | $0.007 |
+| Exportar CSV, español | Igual, más un hallazgo de seguridad real | $0.015 |
+
+- ✅ **El modelo escribió en español correctamente**, citando el código sin traducirlo y con una sugerencia de reemplazo también en español.
+- ✅ **Primera prueba real de la unión chequeo-modelo (v0.8.1):** el modelo repitió la violación de arquitectura y se descartó como duplicado, quedando en 3 comentarios. Las corridas anteriores de la v0.8.1 no habían llegado a probar esto con un modelo real.
+- 🐛 **Error propio encontrado y corregido antes de subir:** la línea de cobertura en español tenía una falta de concordancia ("1 de 1 archivo modificado revisados"). Se corrigió en el mismo commit.
 
 ### M6 — `guardrails init` (derivar reglas de un repo)
 | Repo | Reglas propuestas | Descartadas por ya estar cubiertas | Tiempo | Costo |

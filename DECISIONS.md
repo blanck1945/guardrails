@@ -143,6 +143,18 @@ Cómo mantenerlo: cada decisión nueva se agrega al final con el siguiente núme
 - **Descartado:** ensanchar la ventana de líneas (resultado impredecible) y no hacer nada (ruido visible en el PR).
 - **Consecuencia (costo aceptado):** si un chequeo y el modelo encuentran dos violaciones distintas de la misma regla en el mismo archivo, la segunda queda reducida a una línea de ubicación, sin su texto. Esto debilita en ese caso lo que D-022 prometía (que el modelo siga reportando lo que un chequeo parcial no ve). Alternativa a evaluar si molesta: unir solo cuando el modelo coincide en el texto o en la línea usada.
 - **Decidido por:** el usuario pidió arreglar el duplicado; el diseño lo eligió el orquestador.
+### D-043 — Idioma configurable de los comentarios de revisión
+- **Fecha:** 2026-09-27 · **Estado:** Vigente (v0.8.2)
+- **Decisión:** `language: "en" | "es"` en `.guardrails/config.json` (por defecto inglés, leído de la rama base) y `--language` en el CLI. Los textos que genera el código (chequeos, resumen, cobertura, avisos) se traducen con una plantilla propia por idioma; a Z.ai se le agrega una sola instrucción en el prompt para que el modelo escriba en ese idioma. Código, identificadores, rutas y las palabras `check`/`model` nunca se traducen. En inglés los prompts quedan idénticos byte a byte.
+- **Por qué:** el usuario pidió que fuera configurable, no fijo en un idioma.
+- **Verificado con modelo real:** el modelo escribió su propio hallazgo en español, citando el código sin traducirlo.
+- **Decidido por:** el usuario.
+
+### D-044 — Títulos de chequeo con acción concreta
+- **Fecha:** 2026-09-27 · **Estado:** Vigente (v0.8.2)
+- **Decisión:** cada título de chequeo dice qué está mal en palabras simples ("Missing test file: …", "Forbidden import: …") y el cuerpo termina con la acción a tomar ("Add …", "Remove or replace this import", "Split the file"). Antes eran frases nominales con jerga interna ("No colocated test for …").
+- **Por qué:** el usuario señaló que el título viejo era poco claro. Le gustó la redacción nueva.
+- **Decidido por:** el usuario.
 ---
 
 ## Validación y proceso

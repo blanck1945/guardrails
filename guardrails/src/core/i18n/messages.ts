@@ -322,7 +322,7 @@ const es: Messages = {
     reasonChecksSkipped: (n) => `${count(n, "check", "checks")} sin ejecutar`,
     noChangedFiles: "sin archivos modificados",
     filesLine: (reviewed, total, byModel, others) =>
-      `${reviewed} de ${count(total, "archivo modificado", "archivos modificados")} revisados${byModel ? " por el modelo" : ""}${others ? ` (${others})` : ""}`,
+      `${reviewed} de ${count(total, "archivo modificado revisado", "archivos modificados revisados")}${byModel ? " por el modelo" : ""}${others ? ` (${others})` : ""}`,
     ignored: (n) => `${n} ignorados`,
     removed: (n) => `${n} eliminados`,
     noDiff: (n) => `${n} sin diff`,
