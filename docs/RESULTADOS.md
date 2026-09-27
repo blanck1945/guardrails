@@ -2,7 +2,7 @@
 
 Qué salió bien y qué salió mal en **todas** las mediciones hechas hasta la v0.7.1, en un solo lugar. Es un resumen: el detalle de cada versión está en `guardrails/CHANGELOG.md` (sección *What we observed*), y el porqué de cada decisión en `DECISIONS.md`.
 
-Actualizado: 2026-09-26 (producción en la v0.7.4; v0.8.0 verificada en local, pendiente de subir).
+Actualizado: 2026-09-27 (producción en la v0.8.0).
 
 ---
 
@@ -126,6 +126,16 @@ Total: **6 de 7 ubicaciones sembradas, 0 falsos positivos, 0 hallazgos extra.** 
 - ✅ **Los rótulos cumplen su función:** "solo patrón" aparece cuando un chequeo parcial no encontró nada, para que ese silencio no se lea como garantía; la leyenda aclara que lo del modelo "puede estar equivocado" y que la cobertura dice qué se miró, no que se haya mirado bien.
 - ✅ Los hallazgos publicados no cambiaron y la cobertura no agrega llamadas al modelo.
 - ⚠️ **No verificado en real:** el empaquetado por archivos completos con un diff de más de 200.000 caracteres, los estados de archivos eliminados, ignorados o sin diff (solo en la nube) y el bloque plegado de baja confianza de `deep`. Están probados con tests, no con corridas reales.
+
+### M12 — Cobertura en producción, PR de prueba con etiqueta `standard` (v0.8.0, 2026-09-27)
+| Qué se esperaba | Resultado |
+|---|---|
+| Línea de cobertura y bloque plegado en el comentario | ✅ "Coverage: complete · 1 of 1 changed file reviewed · 5 rules in scope: 2 by checks, 3 by the model" y el bloque "What was reviewed" con las tablas y la leyenda |
+| Tabla de reglas fiel al caso | ✅ Los resultados por regla coinciden con lo sembrado |
+| 3 comentarios para 3 problemas | ⚠️ **5 comentarios**: los 3 esperados, más un segundo comentario del modelo por la misma violación de arquitectura (línea 5, el uso del repositorio) y una observación de severidad baja |
+
+- ✅ Es la primera vez que la cobertura se ve en un PR real. Tiempo de la etiqueta a la revisión: 23 s.
+- ⚠️ **El duplicado se cuela** porque, para una regla con chequeo parcial, un hallazgo del modelo solo se descarta si está a 3 líneas o menos del hallazgo del chequeo, y el import (línea 1) y su uso (línea 5) están a 4. La misma revisión en la v0.7.3 había dado 3 comentarios: el modelo varía entre corridas y la regla de deduplicación es la que deja pasar el caso. Anotado como v0.8.1.
 
 ### M6 — `guardrails init` (derivar reglas de un repo)
 | Repo | Reglas propuestas | Descartadas por ya estar cubiertas | Tiempo | Costo |
