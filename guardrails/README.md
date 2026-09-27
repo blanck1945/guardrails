@@ -24,6 +24,7 @@ All commands run from this directory as `pnpm guardrails <command>`.
 - `--budget-usd N` stops the run when the estimated spend reaches N. `--dry-run` prints the estimate and calls nothing. `--yes` accepts an estimate above US$1.
 - `init` also takes `--timeout-sec N` (default 180, 0 = none): aborts the model calls with a clear error. It prints progress per stage (collect, synthesize, filter, write) on stderr, suggests at most 15 rules, and checks every rule scope against the tracked files (repairs an unambiguous truncated name, drops dead globs, lists them under "Scope warnings").
 - `--json` prints machine-readable output; `--details` adds the coverage details block. `--fail-on high|medium|low|none` sets the severity that fails the run (default `high`).
+- `--language en|es` sets the language of the review texts, overriding `language` of the config (see Language).
 
 Exit codes: `0` no findings at or above the threshold, `1` findings at or above it, `2` usage or infrastructure error (bad arguments, missing API key, git error, incomplete review), `3` budget cut.
 
@@ -90,7 +91,7 @@ Conditions of one entry are combined with AND: `filesGreaterThan`, `filesLessTha
 ## Configuration
 
 `.guardrails/rules.md` holds the rules (one `## <id>` block each, with `scope`, `severity`, `type`, `source`, `status`). `type` (`logic|security|syntax|style`, default `style`) is the type of the finding when the rule is violated: the rule decides it, not the model.
-`.guardrails/config.json` holds `mode`, `autoMode`, `prOverride`, `strictness`, `commentTypes`, `ignorePatterns`, `coverage`, `triggers` and so on.
+`.guardrails/config.json` holds `mode`, `autoMode`, `prOverride`, `strictness`, `commentTypes`, `ignorePatterns`, `coverage`, `language`, `triggers` and so on.
 See `PLAN-DETAILED.md` section 6.4 (in the repository root) for the format.
 
 ### Mechanical checks (`check:`)
@@ -146,6 +147,15 @@ Limits of `only`: regex literals are not recognised by the lexer, JSX text betwe
 - **Diff budget:** the model receives whole files up to 200,000 characters of diff; a file that does not fit is never cut, it is marked `over the diff budget` and the mechanical checks still run over it (they always run over the full diff).
 - **Config** (`.guardrails/config.json`, read from the base commit): `"coverage": "details"` (default: line plus details block), `"line"` (the line only) or `"off"` (nothing).
 - **CLI:** `guardrails review` prints the coverage line; `--details` also prints the block, and `--json` includes the `coverage` object.
+
+## Language
+
+`"language": "en" | "es"` in `.guardrails/config.json` (default `"en"`, read from the base commit; an invalid value falls back to `"en"` and is reported as a config error). `guardrails review --language en|es` overrides it for one run. There is no environment variable.
+
+- **Written by code (no model, no cost), in both languages:** the title and body of every mechanical check finding (for example `Missing test file: RepositoryBadge.tsx has no test next to it`, ending with `Add src/components/RepositoryBadge.test.tsx.`), the summary header and counts, the coverage line and the details block (table headers, statuses, legend, reasons), the `Also at` note, the low-confidence observations block, the `Rule <id> (<source>)` citation (`Regla ...` in Spanish), the cost footer, the notices for failures and for changes to the rules, and the human output of `guardrails review`. Every message lives in one module (`src/core/i18n/messages.ts`) typed so that a message without both languages fails the type check.
+- **Written by the model:** the title, body, suggestion and notes of model findings. With `es` one instruction is added to both prompts (single and agent): write those texts in Spanish and keep code, identifiers, file paths, rule ids and text quoted from the repository unchanged. With `en` the prompts are byte for byte the same as before. The model may ignore the instruction for an occasional finding.
+- **Never translated:** the text of the rules (you write it in your own language, and it is quoted as is), identifiers, rule ids, file paths, code, JSON keys and the hidden markers, the words `check` and `model` used as labels (the legend explains them in the chosen language, so the tables stay searchable), the mode names and the mode detail (`label guardrails:deep`), and the diagnostics printed on stderr by the CLI (range, spend estimate).
+- What is detected, the presets, thresholds, anchors, dedupe and costs do not depend on the language. Only two languages are supported.
 
 ## Environment variables
 

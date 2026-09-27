@@ -12,3 +12,4 @@ export * from "./modes";
 export * from "./summary";
 export * from "./coverage";
 export * from "./coverage-render";
+export * from "./i18n";

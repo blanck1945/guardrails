@@ -3,6 +3,7 @@ import type { Rule } from "../config";
 import type { FileDiff } from "../diff";
 import { globMatchesFile } from "../rules/select";
 import { ruleType } from "../rules/merge";
+import { messages, type Language } from "../i18n";
 import type { Finding } from "../types";
 import type { Workspace } from "../workspace";
 import { LEXABLE, maskLines, type Zone } from "./lexer";
@@ -40,6 +41,8 @@ export interface RunChecksInput {
   files: readonly FileDiff[];
   /** Head tree access. Without it the checks that need file contents or the tree are skipped. */
   workspace?: Workspace | undefined;
+  /** Language of the generated titles and bodies (default English). */
+  lang?: Language | undefined;
 }
 
 /** A single rule never floods a review with more than this many check findings. */
@@ -51,6 +54,8 @@ const TEST_EXTS = ["ts", "tsx", "js", "jsx", "mts", "cts", "mjs", "cjs"];
 
 const inScope = (rule: Rule, path: string): boolean =>
   rule.scope.some((g) => globMatchesFile(g, path)) && !(rule.exclude ?? []).some((g) => globMatchesFile(g, path));
+
+const baseName = (p: string): string => p.slice(p.lastIndexOf("/") + 1);
 
 const firstSentence = (s: string): string => {
   const one = s.trim().split("\n")[0]!.trim();
@@ -92,7 +97,8 @@ export function importMatches(pattern: string, specifier: string): boolean {
  * Runs the mechanical checks of the given rules (only `active` ones with a valid `check`). Deterministic and
  * model-free: same diff and same head tree give the same findings.
  */
-export async function runChecks({ rules, files, workspace }: RunChecksInput): Promise<CheckOutcome> {
+export async function runChecks({ rules, files, workspace, lang }: RunChecksInput): Promise<CheckOutcome> {
+  const t = messages(lang).checks;
   const findings: Finding[] = [];
   const ran: string[] = [];
   const exhaustive: string[] = [];
@@ -132,14 +138,15 @@ export async function runChecks({ rules, files, workspace }: RunChecksInput): Pr
     const spec = parsed.spec;
     const scoped = live.filter((f) => inScope(rule, f.path));
     const out: Finding[] = [];
-    const make = (file: string, line: number, title: string, detail: string): Finding => ({
+    const make = (file: string, line: number, title: string, detail: string, action: string): Finding => ({
       file,
       line,
       type: ruleType(rule),
       severity: rule.severity,
       confidence: 1,
       title: title.slice(0, 120),
-      body: `${detail} Rule \`${rule.id}\`: ${firstSentence(rule.rule)}`.slice(0, 1500),
+      // The action is the last thing the reader sees: the rest is cut first if the body is ever too long.
+      body: `${`${detail} ${t.ruleLine(rule.id, firstSentence(rule.rule))}`.slice(0, 1499 - action.length)} ${action}`,
       ruleId: rule.id,
       origin: "check",
     });
@@ -160,7 +167,7 @@ export async function runChecks({ rules, files, workspace }: RunChecksInput): Pr
           continue;
         }
         if (total > spec.max) {
-          out.push(make(f.path, anchorLine(f, spec.max + 1), `File has ${total} lines (max ${spec.max})`, `\`${f.path}\` has ${total} lines; the limit is ${spec.max}.`));
+          out.push(make(f.path, anchorLine(f, spec.max + 1), t.maxLinesTitle(baseName(f.path), total, spec.max), t.maxLinesDetail(f.path, total, spec.max), t.maxLinesAction));
         }
       }
     } else if (spec.kind === "colocated-test") {
@@ -179,7 +186,7 @@ export async function runChecks({ rules, files, workspace }: RunChecksInput): Pr
           continue;
         }
         if (!hasLogic(text)) continue;
-        out.push(make(f.path, anchorLine(f), `No colocated test for ${name}.${m[3]}`, `\`${f.path}\` has no \`${name}.test.*\` or \`${name}.spec.*\` next to it.`));
+        out.push(make(f.path, anchorLine(f), t.missingTestTitle(`${name}.${m[3]}`), t.missingTestDetail(f.path, name), t.missingTestAction(`${dir}${name}.test.${m[3]}`)));
       }
     } else if (spec.kind === "forbid-import") {
       for (const f of scoped) {
@@ -187,7 +194,7 @@ export async function runChecks({ rules, files, workspace }: RunChecksInput): Pr
         for (const l of addedLinesOf(f)) {
           const hit = importSpecifiers(l.text).find((s) => importMatches(spec.pattern, s));
           if (hit !== undefined) {
-            out.push(make(f.path, l.line, `Forbidden import "${hit}"`, `\`${f.path}\` imports "${hit}", which matches the forbidden pattern \`${spec.pattern}\`.`));
+            out.push(make(f.path, l.line, t.forbidImportTitle(hit), t.forbidImportDetail(f.path, hit, spec.pattern), t.forbidImportAction));
           }
         }
       }
@@ -210,7 +217,7 @@ export async function runChecks({ rules, files, workspace }: RunChecksInput): Pr
           const m = re.exec(subject);
           if (m && m[0] !== "") {
             const shown = m[0].length > 30 ? `${m[0].slice(0, 27)}...` : m[0];
-            out.push(make(f.path, l.line, `Forbidden pattern "${shown}"`, `Line ${l.line} of \`${f.path}\` matches the forbidden pattern \`${spec.source}\`${spec.only ? ` (inside ${spec.only})` : ""}.`));
+            out.push(make(f.path, l.line, t.forbidPatternTitle(shown), t.forbidPatternDetail(l.line, f.path, spec.source, spec.only), t.forbidPatternAction));
           }
         }
       }

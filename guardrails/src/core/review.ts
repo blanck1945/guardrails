@@ -7,6 +7,7 @@ import { estimateCostUsd } from "./pricing";
 import { samplingFor } from "./sampling";
 import { runReviewAgent, type AgentRunResult } from "./agent/loop";
 import { mergeRuns } from "./agent/passes";
+import { messages } from "./i18n";
 import { describeMode, MODE_PRESETS, type ModePreset, type ModeSelection } from "./modes";
 import type { RuleChecksMode } from "./agent/prompts";
 import type { RuleCheck } from "./findings/schema";
@@ -98,8 +99,6 @@ function classifyModelFailure(err: unknown, signal?: AbortSignal): "budget" | "t
   return "error";
 }
 
-const FAILURE_TEXT = { budget: "it reached its spend limit", timeout: "it ran out of time", error: "it failed" } as const;
-
 /**
  * Core of the product. Knows nothing about GitHub, so the cloud worker
  * and a future local CLI can both wrap it.
@@ -119,6 +118,8 @@ export async function reviewDiff(
     coverage: coverageContext,
   }: ReviewOptions,
 ): Promise<ReviewOutput> {
+  const lang = config.language;
+  const msg = messages(lang).summary;
   const before = costTracker?.snapshot();
   const costOf = (usage: UsageTotals): number | null =>
     costTracker && before ? costSince(costTracker, before) : estimateCostUsd(modelSpecOf(model), usage);
@@ -153,7 +154,7 @@ export async function reviewDiff(
   };
 
   // Mechanical checks run first and independently of the model; their findings are never filtered or capped.
-  const checkOutcome = await runChecks({ rules: config.rules, files: parseUnifiedDiff(input.checksDiff ?? input.diff), workspace }).catch(() => ({
+  const checkOutcome = await runChecks({ rules: config.rules, files: parseUnifiedDiff(input.checksDiff ?? input.diff), workspace, lang }).catch(() => ({
     findings: [] as Finding[],
     ran: [] as string[],
     exhaustive: [] as string[],
@@ -198,15 +199,15 @@ export async function reviewDiff(
   // Each finding is moved to the added line that holds the text it quotes, before passes are merged.
   const snap = <T extends Finding>(fs: T[]): T[] => snapAnchors(fs, diffFiles);
   const withOmitted = (summary: string, omitted: number) =>
-    omitted ? `${summary}${summary ? " " : ""}(${omitted} lower-priority finding(s) omitted: over the review cap.)` : summary;
+    omitted ? `${summary}${summary ? " " : ""}(${msg.omitted(omitted)})` : summary;
 
   const checksMeta = { ran: checkOutcome.ran, skipped: checkOutcome.skipped, findings: checkFindings.length, exhaustive: checkOutcome.exhaustive, partial: checkOutcome.partial.map((p) => p.ruleId) };
   const withChecks = (summary: string, failure?: "budget" | "timeout" | "error", passesFailed = 0) => {
     const extra = [
-      selection ? describeMode(selection) : "",
-      passesFailed ? `${passesFailed} of ${preset.passes} review passes did not complete (time or budget); results come from the other pass and the mechanical checks.` : "",
-      checkFindings.length ? `${checkFindings.length} finding(s) come from mechanical rule checks.` : "",
-      failure ? `The model-based review did not complete (${FAILURE_TEXT[failure]}); only the mechanical check results are shown.` : "",
+      selection ? describeMode(selection, lang) : "",
+      passesFailed ? msg.passesFailed(passesFailed, preset.passes) : "",
+      checkFindings.length ? msg.checkFindingsNote(checkFindings.length) : "",
+      failure ? msg.modelFailed(failure) : "",
     ].filter(Boolean);
     return [summary, ...extra].filter(Boolean).join(" ");
   };
@@ -238,7 +239,7 @@ export async function reviewDiff(
         const done = settled.flatMap((s) => (s.status === "fulfilled" ? [s.value] : []));
         if (!done.length) throw (settled[0] as PromiseRejectedResult).reason;
         passesFailed = settled.length - done.length;
-        const union = mergeRuns(done, diffFiles);
+        const union = mergeRuns(done, diffFiles, lang);
         merged = union.merged;
         run = union;
       } else run = await runOne();
@@ -272,7 +273,7 @@ ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
   }
   const modelIncomplete = failure;
   // v0.8.1: repeats of a partial check rule are listed in the check comment ("Also at line N"), whatever the distance.
-  const publishedChecks = mergeModelIntoChecks(checkFindings, foldedIntoChecks, diffFiles);
+  const publishedChecks = mergeModelIntoChecks(checkFindings, foldedIntoChecks, diffFiles, lang);
   const coverage = computeCoverage({
     files: coverageContext?.files ?? diffFiles.map((d) => ({ path: d.path, state: "in-input" as const })),
     rules: config.rules,

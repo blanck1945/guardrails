@@ -1,6 +1,7 @@
 import type { RuleChecksMode } from "./agent/prompts";
 import type { GuardrailsConfig } from "./config";
 import { parseUnifiedDiff } from "./diff";
+import { messages, type Language } from "./i18n";
 import { globMatchesFile } from "./rules/select";
 
 export const MODE_NAMES = ["basic", "standard", "deep"] as const;
@@ -131,6 +132,6 @@ export function selectMode(input: SelectModeInput): ModeSelection {
 }
 
 /** "Review mode: deep (label guardrails:deep)." */
-export function describeMode(sel: Pick<ModeSelection, "mode" | "detail">): string {
-  return `Review mode: ${sel.mode} (${sel.detail}).`;
+export function describeMode(sel: Pick<ModeSelection, "mode" | "detail">, lang?: Language): string {
+  return messages(lang).summary.describeMode(sel.mode, sel.detail);
 }

@@ -1,4 +1,5 @@
 import type { GuardrailsConfig } from "../config";
+import { languageInstruction } from "../i18n";
 import { formatMechanicalNote, formatRulesForPrompt, type PartialNote } from "../rules/format";
 import { STRICTNESS } from "../prompt";
 import type { ReviewInput } from "../types";
@@ -53,6 +54,7 @@ export function buildAgentInstructions(config: GuardrailsConfig, budget: AgentBu
     mechanicalNote,
     ruleChecksInstructions(opts.ruleChecks ?? "ask", !!rules),
     opts.focus === "rules-and-logic" && "Second-pass focus: an independent reviewer already did a general pass. Start with the team rules (verify each one on every changed file), then hunt logic bugs in the changed code (comparators, off-by-one, null handling, ordering, date and deadline logic). Prefer completeness over speed.",
+    languageInstruction(config.language),
   ]
     .filter(Boolean)
     .join("\n\n");

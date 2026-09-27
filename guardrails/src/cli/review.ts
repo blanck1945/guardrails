@@ -10,7 +10,7 @@
 import { execFile } from "node:child_process";
 import type { LanguageModel } from "ai";
 import { parseArgs } from "node:util";
-import { defaultConfig, formatCoverageDetails, formatCoverageLine, loadRules, type Rule } from "../core";
+import { defaultConfig, formatCoverageDetails, formatCoverageLine, isLanguage, loadRules, messages, type Language, type Rule } from "../core";
 import { BudgetExceededError, CostTracker } from "../core/cost";
 import { defaultModelSpec, MissingApiKeyError } from "../core/models";
 import { DEFAULT_IGNORES, isIgnored } from "../core/paths";
@@ -23,7 +23,8 @@ import { LocalWorkspace } from "../core/workspace";
 
 export const REVIEW_USAGE =
   "Usage: guardrails review [--path <repo>] [--base <ref>] [--head <ref>] [--mode basic|standard|deep] [--engine agent|single] [--model <id>]\n" +
-  "                         [--budget-usd <N>] [--dry-run] [--yes] [--json] [--details] [--fail-on high|medium|low|none]";
+  "                         [--budget-usd <N>] [--dry-run] [--yes] [--json] [--details] [--fail-on high|medium|low|none]\n" +
+  "                         [--language en|es]";
 
 const RULES_PATH = ".guardrails/rules.md";
 const CONFIG_PATH = ".guardrails/config.json";
@@ -50,6 +51,8 @@ export interface ReviewCliOptions {
   /** Print the coverage details block (the coverage line is always printed unless the config says `coverage: "off"`). */
   details?: boolean | undefined;
   failOn: FailOn;
+  /** Language of the generated texts; overrides `language` of the config. Undefined = the config decides (default English). */
+  language?: Language | undefined;
   interactive: boolean;
 }
 
@@ -78,6 +81,7 @@ export function parseReviewArgs(argv: string[]): ReviewCliOptions {
       json: { type: "boolean", default: false },
       details: { type: "boolean", default: false },
       "fail-on": { type: "string", default: "high" },
+      language: { type: "string" },
     },
   });
   // `--mode agent|single` is the pre-0.7 spelling of `--engine`; it is still accepted.
@@ -87,6 +91,7 @@ export function parseReviewArgs(argv: string[]): ReviewCliOptions {
   if (engine !== "agent" && engine !== "single") throw new UsageError("--engine must be agent or single");
   const failOn = values["fail-on"] as string;
   if (!["high", "medium", "low", "none"].includes(failOn)) throw new UsageError("--fail-on must be high, medium, low or none");
+  if (values.language !== undefined && !isLanguage(values.language)) throw new UsageError("--language must be en or es");
   const budgetUsd = values["budget-usd"] === undefined ? undefined : Number(values["budget-usd"]);
   if (budgetUsd !== undefined && !(budgetUsd > 0)) throw new UsageError("--budget-usd must be a positive number");
   return {
@@ -102,6 +107,7 @@ export function parseReviewArgs(argv: string[]): ReviewCliOptions {
     json: values.json as boolean,
     details: values.details as boolean,
     failOn: failOn as FailOn,
+    language: values.language as Language | undefined,
     interactive: Boolean(process.stdin.isTTY && process.stdout.isTTY),
   };
 }
@@ -189,10 +195,12 @@ function filterDiff(diff: string, ignores: readonly string[]): { text: string; f
 
 const rank = (s: Severity) => SEVERITIES.indexOf(s);
 
-function citation(f: Finding, rules: readonly Rule[]): string | null {
+function citation(f: Finding, rules: readonly Rule[], lang: Language): string | null {
   if (!f.ruleId) return null;
   const r = rules.find((x) => x.id === f.ruleId);
-  return r ? `Rule ${r.id}${r.source ? ` (${r.source})` : ""}` : null;
+  if (!r) return null;
+  // Same shape as the cloud citation, without the backticks around the id.
+  return messages(lang).citation(r.id, r.source).replaceAll("`", "");
 }
 
 function formatHuman(
@@ -202,38 +210,40 @@ function formatHuman(
   failOn: FailOn,
   coverage: "details" | "line" | "off" = "line",
   details = false,
+  lang: Language = "en",
 ): string {
+  const m = messages(lang).cli;
   const lines: string[] = [];
-  lines.push(`Guardrails review: ${meta.base.slice(0, 8)}..${meta.head.slice(0, 8)} (${meta.files} file(s)), mode ${out.mode}, model ${meta.model}`);
-  if (rules.length) lines.push(`Rules applied: ${rules.map((r) => r.id).join(", ")}`);
+  lines.push(m.header(`${meta.base.slice(0, 8)}..${meta.head.slice(0, 8)}`, meta.files, out.mode, meta.model));
+  if (rules.length) lines.push(m.rulesApplied(rules.map((r) => r.id).join(", ")));
   lines.push("");
   const sorted = [...out.findings].sort((a, b) => rank(b.severity) - rank(a.severity));
-  if (!sorted.length) lines.push("No findings.");
+  if (!sorted.length) lines.push(m.noFindings);
   for (const f of sorted) {
-    lines.push(`${f.file}:${f.line}  [${f.severity}/${f.type}, confidence ${f.confidence}${f.origin === "check" ? ", check" : ""}]  ${f.title}`);
+    lines.push(`${f.file}:${f.line}  ${m.findingMeta(f.severity, f.type, f.confidence, f.origin === "check")}  ${f.title}`);
     for (const l of f.body.split("\n")) lines.push(`    ${l}`);
     if (f.suggestion) {
-      lines.push("    Suggestion:");
+      lines.push(`    ${m.suggestion}`);
       for (const l of f.suggestion.split("\n")) lines.push(`      ${l}`);
     }
-    const c = citation(f, rules);
+    const c = citation(f, rules, lang);
     if (c) lines.push(`    ${c}`);
     lines.push("");
   }
   if (out.dropped.length) {
-    lines.push(`Dropped (${out.dropped.length}):`);
-    for (const d of out.dropped) lines.push(`  - ${d.reason}: ${d.finding.file}:${d.finding.line} ${d.finding.title} (confidence ${d.finding.confidence}, ${d.finding.type})`);
+    lines.push(m.dropped(out.dropped.length));
+    for (const d of out.dropped) lines.push(m.droppedRow(d.reason, d.finding.file, d.finding.line, d.finding.title, d.finding.confidence, d.finding.type));
     lines.push("");
   }
-  if (out.notes) lines.push(`Notes: ${out.notes}`);
-  if (out.checks.findings || out.checks.ran.length) lines.push(`Mechanical checks: ${out.checks.findings} finding(s); rules checked: ${out.checks.ran.join(", ") || "none"}`);
-  if (out.modelIncomplete) lines.push(`The model part did not complete (${out.modelIncomplete}); only mechanical check findings are shown.`);
+  if (out.notes) lines.push(m.notes(out.notes));
+  if (out.checks.findings || out.checks.ran.length) lines.push(m.mechanical(out.checks.findings, out.checks.ran.join(", ")));
+  if (out.modelIncomplete) lines.push(m.modelIncomplete(out.modelIncomplete));
   if (coverage !== "off") {
-    lines.push(formatCoverageLine(out.coverage));
-    if (details) lines.push(formatCoverageDetails(out.coverage));
+    lines.push(formatCoverageLine(out.coverage, lang));
+    if (details) lines.push(formatCoverageDetails(out.coverage, undefined, lang));
   }
-  lines.push(`Cost: ${out.costUsd === null ? "unknown (no known price)" : `$${out.costUsd.toFixed(5)}`}; ${out.usage.steps} step(s), ${out.usage.inputTokens} input / ${out.usage.outputTokens} output tokens`);
-  lines.push(failOn === "none" ? "Threshold: none (never fails)." : `Threshold: fail on ${failOn} or higher.`);
+  lines.push(m.cost(out.costUsd, out.usage.steps, out.usage.inputTokens, out.usage.outputTokens));
+  lines.push(m.threshold(failOn));
   return lines.join("\n");
 }
 
@@ -264,7 +274,8 @@ async function runReviewInner(opts: ReviewCliOptions, io: CliIO): Promise<number
   const loaded = loadRules(await showAt(root, baseSha, CONFIG_PATH), await showAt(root, baseSha, RULES_PATH));
   if (loaded.configErrors.length) io.err(`warning: invalid ${CONFIG_PATH} at base, using defaults for affected fields`);
   if (loaded.rulesErrors.length) io.err(`warning: ${loaded.rulesErrors.length} invalid rule(s) in ${RULES_PATH} at base were skipped`);
-  const config = loaded.config ?? defaultConfig;
+  // `--language` overrides the `language` of the config (which is read from the base commit).
+  const config = { ...(loaded.config ?? defaultConfig), ...(opts.language ? { language: opts.language } : {}) };
 
   const workspace = new LocalWorkspace({ root, baseRef: baseSha, headRef: headSha });
   const ignores = [...DEFAULT_IGNORES, ...config.ignorePatterns];
@@ -332,7 +343,7 @@ async function runReviewInner(opts: ReviewCliOptions, io: CliIO): Promise<number
   if (opts.json) {
     io.out(JSON.stringify({ base: baseSha, head: headSha, model: specLabel, reviewMode: selection.mode, rules: rules.map((r) => r.id), ...out, blocking: blocking.length }, null, 2));
   } else {
-    io.out(formatHuman(out, rules, { base: baseSha, head: headSha, model: specLabel, files: files.length }, opts.failOn, config.coverage, opts.details === true));
+    io.out(formatHuman(out, rules, { base: baseSha, head: headSha, model: specLabel, files: files.length }, opts.failOn, config.coverage, opts.details === true, config.language));
   }
   // Check findings survive a failed model part; only a review with nothing to show is an infrastructure error.
   if (out.incomplete && !blocking.length) return 2;

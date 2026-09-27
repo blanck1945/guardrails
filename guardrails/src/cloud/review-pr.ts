@@ -4,6 +4,7 @@ import {
   formatCoverageDetails,
   formatCoverageLine,
   formatObservationsBlock,
+  messages,
   MODE_PRESETS,
   reviewDiff,
   selectMode,
@@ -11,6 +12,7 @@ import {
   statsFooter,
   type CoverageFileInput,
   type FallbackReason,
+  type Language,
   type Finding,
   type ReviewInput,
   type ReviewMode,
@@ -32,7 +34,7 @@ import { log } from "./log";
 import { loadReviewRules, ruleCitation, rulesChangeNote, rulesForPr } from "./review-rules";
 
 import { BudgetExceededError, CostTracker } from "@/core/cost";
-import { configSchema } from "@/core/config";
+import { configSchema, safeParseConfig } from "@/core/config";
 import { CONFIG_PATH } from "./review-rules";
 import type { PullRequestEvent, Triggers } from "./webhook";
 
@@ -114,8 +116,8 @@ async function readFile(
 }
 
 /** Blank-line-prefixed "Rule `id` (source)" suffix for findings that cite a rule; empty otherwise. */
-function citation(f: Finding, rules: readonly Rule[]): string {
-  const c = ruleCitation(f.ruleId, rules);
+function citation(f: Finding, rules: readonly Rule[], lang: Language): string {
+  const c = ruleCitation(f.ruleId, rules, lang);
   return c ? `\n\n${c}` : "";
 }
 
@@ -140,6 +142,7 @@ export async function reviewPullRequest(ev: PullRequestEvent, deps: ReviewPrDeps
   // Config and rules come from the BASE commit so a PR cannot weaken its own review.
   const loaded = await loadReviewRules((p, ref) => readFile(octo, owner, repo, p, ref), pr.data.base.sha);
   const { config } = loaded;
+  const lang = config.language;
   if (loaded.configErrors.length) console.warn("guardrails: invalid config, using defaults for affected fields", loaded.configErrors);
   if (loaded.rulesErrors.length) console.warn("guardrails: invalid rules in rules.md (skipped)", loaded.rulesErrors);
 
@@ -152,7 +155,7 @@ export async function reviewPullRequest(ev: PullRequestEvent, deps: ReviewPrDeps
   // Only active rules whose scope matches a changed file reach the prompt.
   const rules = rulesForPr(loaded, reviewable.map((f) => f.filename));
   const reviewConfig = { ...config, rules };
-  const rulesNote = rulesChangeNote(files.map((f) => f.filename));
+  const rulesNote = rulesChangeNote(files.map((f) => f.filename), lang);
 
   // Review mode: PR label / description line (unless `prOverride: none`), then config `autoMode`, config `mode`, `standard`.
   const selection = selectMode({
@@ -293,10 +296,10 @@ export async function reviewPullRequest(ev: PullRequestEvent, deps: ReviewPrDeps
     passes: result.passes,
     passesFailed: result.passesFailed,
     // `coverage` comes from the base config: details (default) | line | off.
-    coverageLine: config.coverage === "off" ? undefined : formatCoverageLine(cov),
+    coverageLine: config.coverage === "off" ? undefined : formatCoverageLine(cov, lang),
     coverageDetails:
-      config.coverage === "details" ? formatCoverageDetails(cov, observations) : observations.total ? formatObservationsBlock(observations) : undefined,
-  });
+      config.coverage === "details" ? formatCoverageDetails(cov, observations, lang) : observations.total ? formatObservationsBlock(observations, lang) : undefined,
+  }, lang);
   const showStats = (deps.env ?? process.env).GUARDRAILS_SHOW_STATS === "1";
 
   const inline = published.filter((f) => valid.get(f.file)?.has(f.line));
@@ -310,11 +313,11 @@ export async function reviewPullRequest(ev: PullRequestEvent, deps: ReviewPrDeps
         orphan
           .map(
             (f) =>
-              `- ${SEVERITY_ICON[f.severity]} \`${f.file}:${f.line}\` **${f.title}** — ${f.body}${citation(f, rules).replace(/\n\n/g, " ")}`,
+              `- ${SEVERITY_ICON[f.severity]} \`${f.file}:${f.line}\` **${f.title}** — ${f.body}${citation(f, rules, lang).replace(/\n\n/g, " ")}`,
           )
           .join("\n")
       : "") +
-    (showStats ? `\n\n_${statsFooter({ costUsd: result.costUsd, ms, passes: result.passes })}_` : "");
+    (showStats ? `\n\n_${statsFooter({ costUsd: result.costUsd, ms, passes: result.passes }, lang)}_` : "");
 
   await octo.rest.pulls.createReview({
     owner,
@@ -328,7 +331,7 @@ export async function reviewPullRequest(ev: PullRequestEvent, deps: ReviewPrDeps
       line: f.line,
       side: "RIGHT" as const,
       body:
-        `${SEVERITY_ICON[f.severity]} **${f.title}**\n\n${f.body}${citation(f, rules)}` +
+        `${SEVERITY_ICON[f.severity]} **${f.title}**\n\n${f.body}${citation(f, rules, lang)}` +
         (f.suggestion ? `\n\n\`\`\`suggestion\n${f.suggestion}\n\`\`\`` : ""),
     })),
   });
@@ -362,12 +365,26 @@ export function classifyFailure(err: unknown): FailureKind {
 }
 
 /** Fixed, generic wording: never includes error messages, paths, keys or any other internal detail. */
+export function failureMessage(kind: Exclude<FailureKind, "other">, lang?: Language): string {
+  return messages(lang).cloud.failure[kind](MAX_DIFF_CHARS.toLocaleString("en-US"));
+}
+
+/** The English wording (default language). */
 export const FAILURE_MESSAGES: Record<Exclude<FailureKind, "other">, string> = {
-  "diff-too-large": `**Guardrails** skipped this pull request: the change is too large for one review (limit: ${MAX_DIFF_CHARS.toLocaleString("en-US")} characters of diff). Split it into smaller pull requests, or add \`skip-guardrails\` to opt out.`,
-  "rate-limit": "**Guardrails** could not review this pull request: a rate limit was hit. Push a new commit to try again.",
-  budget: "**Guardrails** stopped this review because it reached its spend limit. Push a new commit to try again.",
-  timeout: "**Guardrails** stopped this review because it ran out of time. Push a new commit to try again.",
+  "diff-too-large": failureMessage("diff-too-large"),
+  "rate-limit": failureMessage("rate-limit"),
+  budget: failureMessage("budget"),
+  timeout: failureMessage("timeout"),
 };
+
+/** `language` from the PR's base commit; English when the file is missing, invalid or cannot be read. */
+export async function loadLanguageFromBase(octo: Octo, ev: PullRequestEvent): Promise<Language> {
+  try {
+    return safeParseConfig(await readFile(octo, ev.owner, ev.repo, CONFIG_PATH, ev.baseSha)).config.language;
+  } catch {
+    return "en";
+  }
+}
 
 /** Posts a short notice for known limit failures. Other failures are only logged (no noise on transient errors). */
 export async function reportReviewFailure(ev: PullRequestEvent, err: unknown): Promise<void> {
@@ -380,6 +397,6 @@ export async function reportReviewFailure(ev: PullRequestEvent, err: unknown): P
     pull_number: ev.number,
     commit_id: ev.headSha,
     event: "COMMENT",
-    body: FAILURE_MESSAGES[kind],
+    body: failureMessage(kind, await loadLanguageFromBase(octo, ev)),
   });
 }

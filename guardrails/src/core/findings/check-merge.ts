@@ -1,8 +1,8 @@
 import type { FileDiff } from "../diff";
-import { withAlsoAt } from "./dedupe";
+import { ALSO_AT, withAlsoAt } from "./dedupe";
+import type { Language } from "../i18n";
 import type { Finding } from "../types";
 
-const ALSO_AT = /\bAlso at lines? \d/;
 const BACKSLASH = String.fromCharCode(92);
 
 /** Same path in every form a finding may carry it (separators, leading `./`). */
@@ -26,6 +26,7 @@ export function mergeModelIntoChecks(
   checks: readonly Finding[],
   models: readonly Finding[],
   diffFiles: readonly FileDiff[],
+  lang?: Language,
 ): Finding[] {
   const extra = new Map<number, Set<number>>();
   for (const m of models) {
@@ -50,6 +51,6 @@ export function mergeModelIntoChecks(
   return checks.map((c, i) => {
     const lines = [...(extra.get(i) ?? [])].sort((a, b) => a - b);
     if (!lines.length || ALSO_AT.test(c.body)) return c;
-    return { ...c, body: withAlsoAt(c.body, lines) };
+    return { ...c, body: withAlsoAt(c.body, lines, lang) };
   });
 }

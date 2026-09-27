@@ -1,4 +1,4 @@
-import { loadRules, selectRulesForFiles, type LoadedRules, type Rule } from "@/core";
+import { loadRules, messages, selectRulesForFiles, type Language, type LoadedRules, type Rule } from "@/core";
 
 export const CONFIG_PATH = ".guardrails/config.json";
 export const RULES_PATH = ".guardrails/rules.md";
@@ -20,19 +20,16 @@ export function rulesForPr(loaded: LoadedRules, changedFiles: readonly string[])
 }
 
 /** Informative note when the PR edits the rules themselves (those edits only apply after merge). */
-export function rulesChangeNote(changedFiles: readonly string[]): string | null {
+export function rulesChangeNote(changedFiles: readonly string[], lang?: Language): string | null {
   const touched = changedFiles.filter((f) => f === RULES_PATH || f === CONFIG_PATH);
   if (!touched.length) return null;
-  return (
-    `ℹ️ This PR changes the Guardrails rules (${touched.map((f) => `\`${f}\``).join(", ")}). ` +
-    "This review used the rules from the base branch; the changes apply to PRs after merge."
-  );
+  return messages(lang).cloud.rulesChangeNote(touched.map((f) => `\`${f}\``).join(", "));
 }
 
 /** "Rule `english-only` (CLAUDE.md)" line appended to a finding that cites a rule. */
-export function ruleCitation(ruleId: string | undefined, rules: readonly Rule[]): string | null {
+export function ruleCitation(ruleId: string | undefined, rules: readonly Rule[], lang?: Language): string | null {
   if (!ruleId) return null;
   const rule = rules.find((r) => r.id === ruleId);
   if (!rule) return null;
-  return `Rule \`${rule.id}\`${rule.source ? ` (${rule.source})` : ""}`;
+  return messages(lang).citation(rule.id, rule.source);
 }

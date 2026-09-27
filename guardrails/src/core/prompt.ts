@@ -1,4 +1,5 @@
 import type { GuardrailsConfig } from "./config";
+import { languageInstruction } from "./i18n";
 import { formatMechanicalNote, formatRulesForPrompt, type PartialNote } from "./rules/format";
 import type { ReviewInput } from "./types";
 
@@ -23,6 +24,7 @@ export function buildSystemPrompt(config: GuardrailsConfig, mechanical: Readonly
     config.instructions && `Team instructions:\n${config.instructions}`,
     rules && `Team rules. Whenever a finding violates one of the rules listed below, you MUST set its ruleId field to that rule's id (exactly as listed) and cite the id and its source in the finding body. Rule violations are reported even if their type is not in the list above:\n${rules}`,
     mechanicalNote,
+    languageInstruction(config.language),
   ]
     .filter(Boolean)
     .join("\n\n");

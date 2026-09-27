@@ -2,6 +2,7 @@ import type { FindingV2 } from "./schema";
 import type { FileDiff } from "../diff";
 import { lineMatchesQuotedSnippet } from "./anchor";
 import { normalizeTitle } from "./fingerprint";
+import { messages, type Language } from "../i18n";
 
 const SEVERITY_RANK = { low: 0, medium: 1, high: 2 } as const;
 
@@ -12,6 +13,8 @@ export interface DedupeOptions {
   minSimilarity?: number;
   /** Parsed diff of the change. When given, "Also at" lists only added lines of it (v0.7.4). */
   diffFiles?: readonly FileDiff[];
+  /** Language of the "Also at" note (default English). */
+  lang?: Language;
 }
 
 function tokens(title: string): Set<string> {
@@ -75,7 +78,8 @@ export function dedupe<T extends FindingV2>(findings: T[], opts: DedupeOptions =
 }
 
 export const BOTH_PASSES_BOOST = 0.1;
-const ALSO_AT = /\bAlso at lines? \d/;
+/** The "Also at" note in any language (see `messages.alsoAt`). */
+export const ALSO_AT = /\b(?:Also at lines?|También en líneas?) \d/;
 
 /** Same problem seen by two different passes: by meaning (rule or title), not by line distance alone. */
 function sameProblem(a: FindingV2, b: FindingV2, minSimilarity: number, lineWindow: number): boolean {
@@ -92,11 +96,10 @@ export const MAX_BODY_CHARS = 1500;
 export const MAX_ALSO_AT = 6;
 
 /** Appends "Also at line(s) ..." (at most 6 locations, then "and K more.") and keeps the whole body within the schema limit by truncating the original text, never the note. */
-export function withAlsoAt(body: string, lines: readonly number[]): string {
+export function withAlsoAt(body: string, lines: readonly number[], lang?: Language): string {
   const shown = lines.slice(0, MAX_ALSO_AT);
   const more = lines.length - shown.length;
-  const list = more > 0 ? `${shown.join(", ")} and ${more} more` : shown.join(", ");
-  const note = `Also at line${lines.length > 1 ? "s" : ""} ${list}.`;
+  const note = messages(lang).alsoAt(shown, more);
   const room = MAX_BODY_CHARS - note.length - 2;
   const text = body.length <= room ? body : `${body.slice(0, Math.max(0, room - 1)).trimEnd()}…`;
   return `${text}\n\n${note}`;
@@ -120,7 +123,7 @@ export function mergeAcrossPasses<T extends FindingV2>(
   passes: readonly (readonly T[])[],
   opts: DedupeOptions = {},
 ): CrossPassMerge<T> {
-  const { lineWindow = 3, minSimilarity = 0.5, diffFiles } = opts;
+  const { lineWindow = 3, minSimilarity = 0.5, diffFiles, lang } = opts;
   const out: { f: T; seen: Set<number>; also: Set<number>; ranges: FindingV2["evidence"] }[] = [];
   let merged = 0;
   passes.forEach((list, pass) => {
@@ -178,7 +181,7 @@ export function mergeAcrossPasses<T extends FindingV2>(
       .filter((l) => !diffFiles || (added?.includes(l) ?? false))
       .sort((a, b) => a - b);
     if (!lines.length || ALSO_AT.test(o.f.body)) return o.f;
-    return { ...o.f, body: withAlsoAt(o.f.body, lines) };
+    return { ...o.f, body: withAlsoAt(o.f.body, lines, lang) };
   });
   return { findings, merged };
 }

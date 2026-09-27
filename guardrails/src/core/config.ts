@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { LANGUAGES } from "./i18n/messages";
 import { activeRules, mergeRules } from "./rules/merge";
 import { parseRulesMd, type RulesMdError } from "./rules/parse";
 
@@ -62,6 +63,11 @@ export const configSchema = z.object({
   prOverride: z.enum(["labels", "none"]).default("labels"),
   /** How much of the coverage report the review summary shows: line + collapsed details (default), the line only, or nothing. */
   coverage: z.enum(["details", "line", "off"]).default("details"),
+  /**
+   * Language of every review text the code generates (check findings, summary, coverage, "Also at", notices) and of the
+   * model's own findings and notes (one instruction in the prompt). `en` (default) or `es`. Rule texts are never translated.
+   */
+  language: z.enum(LANGUAGES).default("en"),
   strictness: z.number().int().min(1).max(3).default(2),
   commentTypes: z
     .array(z.enum(["logic", "security", "syntax", "style"]))
