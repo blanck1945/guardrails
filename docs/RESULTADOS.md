@@ -2,7 +2,7 @@
 
 Qué salió bien y qué salió mal en **todas** las mediciones hechas hasta la v0.7.1, en un solo lugar. Es un resumen: el detalle de cada versión está en `guardrails/CHANGELOG.md` (sección *What we observed*), y el porqué de cada decisión en `DECISIONS.md`.
 
-Actualizado: 2026-09-27 (producción en la v0.8.0).
+Actualizado: 2026-09-27 (producción en la v0.8.0; v0.8.1 verificada en local, pendiente de subir).
 
 ---
 
@@ -136,6 +136,16 @@ Total: **6 de 7 ubicaciones sembradas, 0 falsos positivos, 0 hallazgos extra.** 
 
 - ✅ Es la primera vez que la cobertura se ve en un PR real. Tiempo de la etiqueta a la revisión: 23 s.
 - ⚠️ **El duplicado se cuela** porque, para una regla con chequeo parcial, un hallazgo del modelo solo se descarta si está a 3 líneas o menos del hallazgo del chequeo, y el import (línea 1) y su uso (línea 5) están a 4. La misma revisión en la v0.7.3 había dado 3 comentarios: el modelo varía entre corridas y la regla de deduplicación es la que deja pasar el caso. Anotado como v0.8.1.
+
+### M13 — Unión entre chequeo y modelo (v0.8.1, local, 4 corridas, $0.029)
+| Corrida | Resultado | Costo |
+|---|---|---|
+| Forma del PR #9, 3 corridas | Exactamente **3 comentarios** en cada una (2 por chequeo y el comentario en español), sin segundo comentario por la violación de arquitectura | $0.005 a $0.006 |
+| Exportar CSV | Los 2 problemas por chequeo, más un tercero del modelo (inyección de fórmulas en el CSV, seguridad, confianza 0.7) | $0.012 |
+
+- ✅ La línea de cobertura sigue intacta y no hubo comentarios duplicados.
+- ⚠️ **Lo que esta prueba no demuestra:** en estas corridas el modelo no repitió por su cuenta la violación de arquitectura, así que la unión probablemente no se ejerció con una salida real; está probada con tests unitarios (31 nuevos). Falta una corrida real en la que el modelo repita la violación.
+- ⚠️ **Costo de diseño:** si el chequeo y el modelo encuentran dos violaciones distintas de la misma regla en un mismo archivo, la segunda queda como una línea "Also at", sin su propio texto.
 
 ### M6 — `guardrails init` (derivar reglas de un repo)
 | Repo | Reglas propuestas | Descartadas por ya estar cubiertas | Tiempo | Costo |

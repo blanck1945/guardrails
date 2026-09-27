@@ -136,6 +136,13 @@ Cómo mantenerlo: cada decisión nueva se agrega al final con el siguiente núme
 - **Descartado:** confiar solo en el número de línea del modelo (era impreciso en producción) y anclar solo por coincidencia de texto (el error que se corrigió).
 - **Consecuencia:** si el modelo da un rango equivocado, el ancla lo sigue. Las ubicaciones extra de "Also at" todavía no se validan (anotado para la v0.7.4).
 - **Decidido por:** el orquestador, a partir de la verificación de la v0.7.2.
+### D-042 — Un hallazgo del modelo de la misma regla y archivo que uno de chequeo se une al del chequeo
+- **Fecha:** 2026-09-27 · **Estado:** Vigente (v0.8.1)
+- **Decisión:** para una regla que ya tiene un hallazgo de chequeo en un archivo, cualquier hallazgo del modelo de la misma regla y archivo se une a ese comentario como "Also at línea N", sin importar la distancia. El comentario del chequeo no cambia de severidad, confianza ni ancla. Un hallazgo del modelo sin identificador de regla se publica aparte. Extiende D-025 (unión entre pasadas) a la unión entre chequeo y modelo.
+- **Por qué:** en producción, el PR de prueba recibió 5 comentarios para 3 problemas: el modelo repitió la violación de arquitectura en la línea 5 y el chequeo la había marcado en la línea 1. El filtro que existía solo cubría 3 líneas de distancia.
+- **Descartado:** ensanchar la ventana de líneas (resultado impredecible) y no hacer nada (ruido visible en el PR).
+- **Consecuencia (costo aceptado):** si un chequeo y el modelo encuentran dos violaciones distintas de la misma regla en el mismo archivo, la segunda queda reducida a una línea de ubicación, sin su texto. Esto debilita en ese caso lo que D-022 prometía (que el modelo siga reportando lo que un chequeo parcial no ve). Alternativa a evaluar si molesta: unir solo cuando el modelo coincide en el texto o en la línea usada.
+- **Decidido por:** el usuario pidió arreglar el duplicado; el diseño lo eligió el orquestador.
 ---
 
 ## Validación y proceso

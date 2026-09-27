@@ -10,8 +10,19 @@ The "Next" of a version is the "What we did" of the following one. Newest first.
 - Tests (mock models only): the PR #9 shape (import at line 1, use at line 5), any distance, another file, another rule or no rule, exhaustive rule unchanged, a non-added extra line, check finding severity/confidence/anchor, cap of 6 and the length limit, coverage, idempotence, path normalisation. One existing assertion changed by design: `partial-coverage.test.ts` "keeps a model finding on a location the check cannot see" (model line 8 against check line 2) now expects the finding folded into the check comment with `Also at line 8.` and one `duplicate` dropped.
 
 ### What we observed
-Verification pending; script provided (`run-v081-verify.sh`: three standard runs on the PR #9 shape and one on `v73/csv-export`). Motivation from v0.8.0 in production: PR #9 of `causas-viewer` got 5 comments for 3 seeded problems because the import (line 1, check) and its use (line 5, model) are 4 lines apart. Expected: the two check findings plus the Spanish model comment, no second comment for the layered violation.
+Real verification, local CLI, `zai:glm-5.3`, temperature 0, `--mode standard --details --budget-usd 0.10`, on the temporary clone of `causas-viewer` (kept on `base71`, push disabled; the heads `origin/test/checks-violations` and `v73/csv-export` were passed with `--head` and never checked out). Four runs, US$0.029 in total.
 
+| Run | Findings (file:line, origin) | Cost | Time |
+|---|---|---|---|
+| PR #9 shape 1 | RepositoryBadge.tsx:1 forbidden import (check); :1 no colocated test (check); :3 Spanish comment (model) | 0.0063 | 15 s |
+| PR #9 shape 2 | same three, comment at :3 | 0.0048 | 18 s |
+| PR #9 shape 3 | same three, comment at :4 | 0.0051 | 16 s |
+| csv-export | CaseExportButton.tsx:1 forbidden import (check); csv.ts:1 no colocated test (check); csv.ts:15 CSV formula injection (model, security, 0.7) | 0.0125 | 26 s |
+
+- **Goal met in the three runs on the PR #9 shape: exactly three comments, no second comment for the layered-data-access violation.** Coverage line intact in all runs.
+- **Important limit of this evidence:** in these three runs the model did not repeat the layered violation on its own (it did in the production run of v0.8.0, and not in the local runs of v0.8.0 either), so the check-to-model merge was probably not exercised by a real model output here. The merge is proven by the unit tests (31 new, including the exact PR #9 shape); a real run in which the model repeats the violation is still needed to see it in action.
+- **csv-export:** the two check findings are unchanged. A third finding appeared (CSV formula injection at `csv.ts:15`, security, confidence 0.7). It is not a seeded problem but a real security concern that `deep` had already listed as an extra in earlier runs; the model varies between runs on this PR (2 findings in the v0.8.0 run, 3 here).
+- **Consequence of the change, documented:** when a check finds a rule violation in a file and the model finds a different violation of the same rule in the same file, the second is reduced to an "Also at line N" (a model finding that omits the rule id is still published on its own). This weakens the v0.7.1 promise that the model keeps reporting what a partial check cannot see, in that one case.
 ### Next (v0.9.0)
 - Review record v1: a hidden, signed marker at the end of the summary (D-029, D-030) so a review can be counted later.
 - `guardrails report`: Markdown and CSV from the records plus live feedback signals (D-031).
