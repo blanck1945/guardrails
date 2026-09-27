@@ -92,7 +92,7 @@ export const MAX_BODY_CHARS = 1500;
 export const MAX_ALSO_AT = 6;
 
 /** Appends "Also at line(s) ..." (at most 6 locations, then "and K more.") and keeps the whole body within the schema limit by truncating the original text, never the note. */
-function withAlsoAt(body: string, lines: readonly number[]): string {
+export function withAlsoAt(body: string, lines: readonly number[]): string {
   const shown = lines.slice(0, MAX_ALSO_AT);
   const more = lines.length - shown.length;
   const list = more > 0 ? `${shown.join(", ")} and ${more} more` : shown.join(", ");

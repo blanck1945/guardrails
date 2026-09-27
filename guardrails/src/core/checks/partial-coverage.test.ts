@@ -92,12 +92,13 @@ describe("reviewDiff with partial and exhaustive checks", () => {
     expect(text).toContain("src/List.tsx:2");
   });
 
-  it("keeps a model finding on a location the check cannot see", async () => {
+  it("folds a model finding on a location the check cannot see into the check comment (v0.8.1)", async () => {
     const r = await reviewDiff(input, { config, model: modelWith([llmFinding()]), mode: "agent", workspace: ws });
     const got = r.findings.map((f) => [f.origin, f.file, f.line, f.ruleId]);
     expect(got).toContainEqual(["check", "src/List.tsx", 2, "ui-spanish"]);
-    expect(got).toContainEqual(["llm", "src/List.tsx", 8, "ui-spanish"]);
-    expect(r.dropped).toEqual([]);
+    expect(got).not.toContainEqual(["llm", "src/List.tsx", 8, "ui-spanish"]);
+    expect(r.findings.find((f) => f.ruleId === "ui-spanish")!.body).toContain("Also at line 8.");
+    expect(r.dropped.map((d) => d.reason)).toEqual(["duplicate"]);
   });
 
   it("still drops a model finding that repeats a check finding (same file, rule and nearby line)", async () => {

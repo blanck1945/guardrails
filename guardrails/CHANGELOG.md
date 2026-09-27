@@ -3,6 +3,21 @@
 Each version has three parts: what we did, what we observed when we measured it, and what that made us do next.
 The "Next" of a version is the "What we did" of the following one. Newest first. See `CLAUDE.md` for the convention.
 
+## v0.8.1 — 2026-09-27
+### What we did
+- One rule, one file, one comment between a check and the model (extends D-025 from pass-to-pass to check-to-model). A model finding with the same rule and file as a check finding is no longer published, whatever the distance (before: only within 3 lines for a partial rule). For an `exhaustive` rule it is dropped as before; for a `partial` rule it is merged into the closest check finding of that rule and file as `Also at line N.`. The extra line is listed only if it is an added line of that file in the diff (the anchor being merged is the model's own); at most 6 locations then `and K more`, within the 1500-character body limit. The check finding never changes severity, confidence 1, origin or anchor. Coverage counts the merge with the existing `duplicate` reason (no new reason). Paths are compared normalised (separators, leading `./`). Code: `src/core/findings/check-merge.ts` and `src/core/review.ts`.
+- Trade-off, documented in the README: if the same rule is violated in two genuinely different ways in one file, the second is reduced to an "Also at" line without its own text. Findings of another file, another rule or without a rule are untouched (the low-severity remark without a rule stays inline; a model finding that omits the rule id also stays inline, a known limit).
+- Tests (mock models only): the PR #9 shape (import at line 1, use at line 5), any distance, another file, another rule or no rule, exhaustive rule unchanged, a non-added extra line, check finding severity/confidence/anchor, cap of 6 and the length limit, coverage, idempotence, path normalisation. One existing assertion changed by design: `partial-coverage.test.ts` "keeps a model finding on a location the check cannot see" (model line 8 against check line 2) now expects the finding folded into the check comment with `Also at line 8.` and one `duplicate` dropped.
+
+### What we observed
+Verification pending; script provided (`run-v081-verify.sh`: three standard runs on the PR #9 shape and one on `v73/csv-export`). Motivation from v0.8.0 in production: PR #9 of `causas-viewer` got 5 comments for 3 seeded problems because the import (line 1, check) and its use (line 5, model) are 4 lines apart. Expected: the two check findings plus the Spanish model comment, no second comment for the layered violation.
+
+### Next (v0.9.0)
+- Review record v1: a hidden, signed marker at the end of the summary (D-029, D-030) so a review can be counted later.
+- `guardrails report`: Markdown and CSV from the records plus live feedback signals (D-031).
+- Cost and duration visible by default.
+- Still open from v0.8.0: whether low-severity model observations without a rule go to the collapsed block in `standard` as in `deep` (D-041).
+
 ## v0.8.0 — 2026-09-26
 ### What we did
 - Coverage in every review summary (D-027). After the counts line there is one line of at most 220 characters, for example `Coverage: complete · 4 of 5 changed files reviewed (1 ignored) · 5 rules in scope: 2 by checks, 3 by the model (3 with a verdict)`, and at the end a collapsed "What was reviewed" block (at most 8,000 characters) with a files table and a rules table. Two labels are kept apart: **check** (exact result of code for what the check tests) and **model** (the model's claim). Incomplete runs say why in the line (`partial (model ran out of time: checks only)`, `1 of 2 passes failed`, `3 files over the diff budget`, `repo download failed: single-call review`, `no verdict for 2 rules`; two reasons, then `+N more`). Paths that look like secrets are never printed. The renderer is pure and deterministic (`src/core/coverage-render.ts`).

@@ -12,6 +12,7 @@ import type { RuleChecksMode } from "./agent/prompts";
 import type { RuleCheck } from "./findings/schema";
 import { emptyUsage, sumUsage, type UsageTotals } from "./agent/budget";
 import type { GuardrailsConfig } from "./config";
+import { mergeModelIntoChecks, ruleFileKey } from "./findings/check-merge";
 import { capFindings, capFor, collapseByLocation } from "./findings/limits";
 import { verifyAbsenceClaims } from "./findings/verify";
 import { snapAnchors } from "./findings/anchor";
@@ -28,9 +29,6 @@ const REVIEW_EXAMPLE = {
     { file: "src/a.ts", line: 12, type: "logic", severity: "medium", confidence: 0.8, title: "Short title", body: "What is wrong and why.", ruleId: "optional-rule-id" },
   ],
 };
-
-/** A model finding this close (in lines) to a check finding of the same partial rule and file is a repeat. */
-const NEARBY_LINES = 3;
 
 const MIN_CONFIDENCE = { 1: 0.8, 2: 0.6, 3: 0.4 } as const;
 
@@ -167,21 +165,12 @@ export async function reviewDiff(
   const partialChecks = checkOutcome.partial;
   const partialIds = new Set(partialChecks.map((p) => p.ruleId));
   const checkFindings = checkOutcome.findings;
-  const checkKeys = new Set(checkFindings.map((f) => `${f.file}\0${f.ruleId}`));
-  const partialLines = new Map<string, number[]>();
-  for (const f of checkFindings) {
-    if (!f.ruleId || !partialIds.has(f.ruleId)) continue;
-    const key = `${f.file}\0${f.ruleId}`;
-    partialLines.set(key, [...(partialLines.get(key) ?? []), f.line]);
-  }
-  /** A model finding repeats a check finding: same file and rule; for a partial rule also the same or a nearby line. */
-  const repeatsCheck = (f: Finding): boolean => {
-    if (!f.ruleId) return false;
-    const key = `${f.file}\0${f.ruleId}`;
-    if (!checkKeys.has(key)) return false;
-    const lines = partialLines.get(key);
-    return lines ? lines.some((l) => Math.abs(l - f.line) <= NEARBY_LINES) : true;
-  };
+  const checkKeys = new Set(checkOutcome.findings.map((f) => ruleFileKey(f)));
+  /** A model finding repeats a check finding when it has the same file and rule, whatever the distance. */
+  const repeatsCheck = (f: Finding): boolean => !!f.ruleId && checkKeys.has(ruleFileKey(f));
+  /** Repeats of a partial rule are folded into the closest check finding (v0.8.1); those of an exhaustive rule are just dropped. */
+  const foldsIntoCheck = (f: Finding): boolean => !!f.ruleId && partialIds.has(f.ruleId);
+  const foldedIntoChecks: Finding[] = [];
 
   // Deterministic grounding: drop findings that claim a file is absent when the head tree has it.
   const verify = async (all: Finding[]) => {
@@ -189,6 +178,7 @@ export async function reviewDiff(
     // A model finding that repeats a mechanical check (same file, same rule) is noise.
     const fs = tagged.filter((f) => !repeatsCheck(f));
     const repeated = tagged.filter((f) => !fs.includes(f));
+    foldedIntoChecks.push(...repeated.filter(foldsIntoCheck));
     const { findings, dropped } = filterFindings(fs);
     dropped.push(...repeated.map((finding) => ({ finding, reason: "duplicate" as const })));
     let kept = findings;
@@ -281,6 +271,8 @@ ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
     part = { findings: [], dropped: [], omitted: 0, summary: "", usage: emptyUsage(), incomplete: true, notes: undefined, ruleChecks: undefined, passesFailed: 0, passes: 1, merged: 0, forcedWrapUp: false, filesOpened: [] };
   }
   const modelIncomplete = failure;
+  // v0.8.1: repeats of a partial check rule are listed in the check comment ("Also at line N"), whatever the distance.
+  const publishedChecks = mergeModelIntoChecks(checkFindings, foldedIntoChecks, diffFiles);
   const coverage = computeCoverage({
     files: coverageContext?.files ?? diffFiles.map((d) => ({ path: d.path, state: "in-input" as const })),
     rules: config.rules,
@@ -289,7 +281,7 @@ ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
     ruleChecksMode: ruleChecks,
     checks: { ran: checkOutcome.ran, exhaustive: checkOutcome.exhaustive, partial: checksMeta.partial, skipped: checkOutcome.skipped },
     ruleChecks: part.ruleChecks,
-    findings: [...checkFindings, ...part.findings],
+    findings: [...publishedChecks, ...part.findings],
     dropped: part.dropped,
     modelIncomplete,
     incomplete: part.incomplete,
@@ -303,7 +295,7 @@ ${jsonOnlyInstruction(REVIEW_EXAMPLE)}`,
   });
   return {
     summary: withChecks(withOmitted(part.summary, part.omitted), failure, part.passesFailed),
-    findings: [...checkFindings, ...part.findings],
+    findings: [...publishedChecks, ...part.findings],
     dropped: part.dropped,
     mode,
     usage: part.usage,
